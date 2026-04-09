@@ -1,0 +1,4 @@
+workflow-multibranch
+junit
+htmlpublisher
+coverage
