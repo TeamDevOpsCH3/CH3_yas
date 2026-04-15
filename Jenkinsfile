@@ -74,20 +74,19 @@ def runServicePipeline(service) {
 pipeline {
     agent any
 
-    environment {
-        GITLEAKS_IMAGE = 'zricethezav/gitleaks:v8.18.4'
-    }
-
     stages {
         stage('Security Scan (Gitleaks)') {
             steps {
                 sh '''
-                if ! docker image inspect ${GITLEAKS_IMAGE} >/dev/null 2>&1; then
-                    docker pull ${GITLEAKS_IMAGE}
+                set -eu
+
+                if ! command -v gitleaks >/dev/null 2>&1; then
+                    echo "gitleaks binary is missing on Jenkins agent."
+                    echo "Use docker/jenkins/Dockerfile (pre-baked image) or install gitleaks in the agent image."
+                    exit 127
                 fi
 
-                docker run --rm -v ${WORKSPACE}:/repo -w /repo ${GITLEAKS_IMAGE} \
-                    detect --source=/repo --config=/repo/gitleaks.toml --verbose --no-git --exit-code=1
+                gitleaks detect --source="${WORKSPACE}" --config="${WORKSPACE}/gitleaks.toml" --verbose --no-git --exit-code=1
                 '''
             }
         }

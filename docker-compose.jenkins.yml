@@ -1,0 +1,27 @@
+services:
+  jenkins:
+    build:
+      context: .
+      dockerfile: docker/jenkins/Dockerfile
+      args:
+        GITLEAKS_VERSION: "8.18.4"
+    image: ch3_yas/jenkins-local:latest
+    container_name: jenkins-local
+    restart: unless-stopped
+    ports:
+      - "8080:8080"
+      - "50000:50000"
+    environment:
+      - JAVA_OPTS=-Djenkins.install.runSetupWizard=false
+    volumes:
+      - jenkins_home:/var/jenkins_home
+      - /var/run/docker.sock:/var/run/docker.sock
+    networks:
+      - jenkins-net
+
+volumes:
+  jenkins_home:
+
+networks:
+  jenkins-net:
+    driver: bridge
