@@ -74,11 +74,24 @@ def runServicePipeline(service) {
 pipeline {
     agent any
 
-    // triggers {
-    //     githubPush()
-    // }
+    environment {
+        GITLEAKS_IMAGE = 'zricethezav/gitleaks:v8.18.4'
+    }
 
     stages {
+        stage('Security Scan (Gitleaks)') {
+            steps {
+                sh '''
+                if ! docker image inspect ${GITLEAKS_IMAGE} >/dev/null 2>&1; then
+                    docker pull ${GITLEAKS_IMAGE}
+                fi
+
+                docker run --rm -v ${WORKSPACE}:/repo -w /repo ${GITLEAKS_IMAGE} \
+                    detect --source=/repo --config=/repo/gitleaks.toml --verbose --no-git --exit-code=1
+                '''
+            }
+        }
+
         stage('CI Pipeline for Microservices') {
             steps {
                 script {
