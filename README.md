@@ -117,5 +117,3 @@ By contributing, you agree that your contributions will be licensed under MIT Li
         </tr>
     </tbody>
 </table>
-
-tôi là cừn - tui test webhook trigger cho jenkins.
