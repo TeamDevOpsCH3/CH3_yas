@@ -15,7 +15,7 @@ def microservices = [
         [name: 'Unit Test', command: 'echo "Running unit tests for Customer Service"'],
         [name: 'Integration Test', command: 'echo "Running integration tests for Customer Service"'],
         [name: 'Build', command: 'echo "Building Customer Service"'],
-        [name: 'Security Scan', command: 'echo "Running security scan for Customer Service"'],
+        [name: 'Snyk Security Scan', command: 'snyk test --file=customer/pom.xml --severity-threshold=high'],
         [name: 'Deploy', command: 'echo "Deploying Customer Service to staging environment"']
     ]],
     [id: 'cart', display: 'Cart Service', commands: []],
@@ -81,40 +81,45 @@ pipeline {
     stages {
         stage('CI Pipeline for Microservices') {
             steps {
-                script {
+                withCredentials([string(credentialsId: 'snyk-api-token', variable: 'snyk-api-token')]) {
+                    script {
+                        def snykTool = tool name: 'snyk-cli', type: 'com.snyk.jenkins.SnykStep$SnykInstallation'
+                        
+                        withEnv(["PATH+SNYK=${snykTool}/bin"]) {
+                            def changedPaths = collectChangedPaths()
+                            def pomChanged = changedPaths.contains('pom.xml')
+                            def noScmContext = changedPaths.isEmpty()
 
-                    def changedPaths = collectChangedPaths()
-                    def pomChanged = changedPaths.contains('pom.xml')
-                    def noScmContext = changedPaths.isEmpty()
+                            echo "Changed paths: ${changedPaths}"
 
-                    echo "Changed paths: ${changedPaths}"
+                            def branches = [:]
 
-                    def branches = [:]
+                            microservices.each { service ->
 
-                    microservices.each { service ->
+                                def serviceId = service.id
+                                def serviceDisplay = service.display
 
-                        def serviceId = service.id
-                        def serviceDisplay = service.display
+                                branches[serviceDisplay] = {
 
-                        branches[serviceDisplay] = {
+                                    def serviceChanged = changedPaths.any { path ->
+                                        path.startsWith(serviceId + '/')
+                                    }
 
-                            def serviceChanged = changedPaths.any { path ->
-                                path.startsWith(serviceId + '/')
+                                    def shouldRun = noScmContext || pomChanged || serviceChanged
+
+                                    if (!shouldRun) {
+                                        echo "Skipping ${serviceDisplay} (no related changes)"
+                                        return
+                                    }
+
+                                    echo "Running pipeline for ${serviceDisplay}"
+                                    runServicePipeline(service)
+                                }
                             }
 
-                            def shouldRun = noScmContext || pomChanged || serviceChanged
-
-                            if (!shouldRun) {
-                                echo "Skipping ${serviceDisplay} (no related changes)"
-                                return
-                            }
-
-                            echo "Running pipeline for ${serviceDisplay}"
-                            runServicePipeline(service)
+                            parallel branches + [failFast: false]
                         }
                     }
-
-                    parallel branches + [failFast: false]
                 }
             }
         }
