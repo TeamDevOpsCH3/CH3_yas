@@ -132,6 +132,14 @@ pipeline {
         MAVEN_OPTS = '-Xmx512m'
     }
 
+    parameters {
+        booleanParam(
+            name        : 'FORCE_RUN_ALL',
+            defaultValue: false,
+            description : 'Force run Test + Coverage for ALL services regardless of which files changed'
+        )
+    }
+
     // triggers {
     //     githubPush()
     // }
@@ -153,11 +161,12 @@ pipeline {
                     env.SERVICES_TO_RUN = microservices
                         .findAll { service ->
                             def serviceChanged = changedPaths.any { it.startsWith(service.id + '/') }
-                            noScmContext || pomChanged || serviceChanged
+                            params.FORCE_RUN_ALL || noScmContext || pomChanged || serviceChanged
                         }
                         .collect { it.display }
                         .join(',')
 
+                    echo "Force run all: ${params.FORCE_RUN_ALL}"
                     echo "Services to run: ${env.SERVICES_TO_RUN ?: '(none)'}"
                 }
             }
