@@ -3,39 +3,34 @@ how to add new service/stage:
 template: [
     id: 'service-name',                                             // folder name (e.g., 'payment')
     display: 'Service Display Name',                                // Jenkins UI name (e.g., 'Payment Service')
-    commands: [                                                     // array of stages to run for this service
+    enableTest: true,                                               // set true to run mvn test + publish JUnit XML
+    enableCoverage: true,                                           // set true to generate + publish JaCoCo report
+    commands: [                                                     // extra stages to run for this service
         [name: 'Stage Name', command: 'your shell command here'],
-        [name: 'Unit Test', command: 'mvn test -pl service-name'],
     ]
 ]
 */
 
 def microservices = [
-    [id: 'customer', display: 'Customer Service', commands: [
-        [name: 'Unit Test', command: 'echo "Running unit tests for Customer Service"'],
-        [name: 'Integration Test', command: 'echo "Running integration tests for Customer Service"'],
-        [name: 'Build', command: 'echo "Building Customer Service"'],
-        [name: 'Snyk Security Scan', command: 'snyk test --file=customer/pom.xml --severity-threshold=high'],
-        [name: 'Deploy', command: 'echo "Deploying Customer Service to staging environment"']
-    ]],
-    [id: 'cart', display: 'Cart Service', commands: []],
-    [id: 'backoffice-bff', display: 'Backoffice BFF Service', commands: []],
-    [id: 'inventory', display: 'Inventory Service', commands: []],
-    [id: 'location', display: 'Location Service', commands: []],
-    [id: 'media', display: 'Media Service', commands: []],
-    [id: 'order', display: 'Order Service', commands: []],
-    [id: 'payment-paypal', display: 'Payment Paypal Service', commands: []],
-    [id: 'payment', display: 'Payment Service', commands: []],
-    [id: 'product', display: 'Product Service', commands: []],
-    [id: 'promotion', display: 'Promotion Service', commands: []],
-    [id: 'rating', display: 'Rating Service', commands: []],
-    [id: 'search', display: 'Search Service', commands: []],
-    [id: 'storefront-bff', display: 'Storefront BFF Service', commands: []],
-    [id: 'tax', display: 'Tax Service', commands: []],
-    [id: 'webhook', display: 'Webhook Service', commands: []],
-    [id: 'sampledata', display: 'Sampledata Service', commands: []],
-    [id: 'recommendation', display: 'Recommendation Service', commands: []],
-    [id: 'delivery', display: 'Delivery Service', commands: []]
+    [id: 'customer',       display: 'Customer Service',       enableTest: true,  enableCoverage: true,  commands: []],
+    [id: 'cart',           display: 'Cart Service',           enableTest: true,  enableCoverage: true,  commands: []],
+    [id: 'backoffice-bff', display: 'Backoffice BFF Service', enableTest: false, enableCoverage: false, commands: []],
+    [id: 'inventory',      display: 'Inventory Service',      enableTest: true,  enableCoverage: true,  commands: []],
+    [id: 'location',       display: 'Location Service',       enableTest: true,  enableCoverage: true,  commands: []],
+    [id: 'media',          display: 'Media Service',          enableTest: true,  enableCoverage: true,  commands: []],
+    [id: 'order',          display: 'Order Service',          enableTest: true,  enableCoverage: true,  commands: []],
+    [id: 'payment-paypal', display: 'Payment Paypal Service', enableTest: true,  enableCoverage: true,  commands: []],
+    [id: 'payment',        display: 'Payment Service',        enableTest: true,  enableCoverage: true,  commands: []],
+    [id: 'product',        display: 'Product Service',        enableTest: true,  enableCoverage: true,  commands: []],
+    [id: 'promotion',      display: 'Promotion Service',      enableTest: true,  enableCoverage: true,  commands: []],
+    [id: 'rating',         display: 'Rating Service',         enableTest: true,  enableCoverage: true,  commands: []],
+    [id: 'search',         display: 'Search Service',         enableTest: false, enableCoverage: false, commands: []],
+    [id: 'storefront-bff', display: 'Storefront BFF Service', enableTest: false, enableCoverage: false, commands: []],
+    [id: 'tax',            display: 'Tax Service',            enableTest: true,  enableCoverage: true,  commands: []],
+    [id: 'webhook',        display: 'Webhook Service',        enableTest: true,  enableCoverage: true,  commands: []],
+    [id: 'sampledata',     display: 'Sampledata Service',     enableTest: false, enableCoverage: false, commands: []],
+    [id: 'recommendation', display: 'Recommendation Service', enableTest: false, enableCoverage: false, commands: []],
+    [id: 'delivery',       display: 'Delivery Service',       enableTest: true,  enableCoverage: true,  commands: []],
 ]
 
 @NonCPS
@@ -52,14 +47,61 @@ def collectChangedPaths() {
 }
 
 def runServicePipeline(service) {
+    def serviceId      = service.id
     def serviceDisplay = service.display
-    def commands = service.commands ?: []
+    def enableTest     = service.enableTest     ?: false
+    def enableCoverage = service.enableCoverage ?: false
+    def commands       = service.commands       ?: []
 
-    if (commands.isEmpty()) {
-        echo "No commands defined for ${serviceDisplay}, skipping..."
-        return
+    // ------------------------------------------------------------------ //
+    // Stage Test: mvn test (unit tests only) + publish JUnit XML          //
+    // ------------------------------------------------------------------ //
+    if (enableTest) {
+        stage("${serviceDisplay} - Test") {
+            // -DskipITs: skip integration tests (handled by failsafe, not surefire)
+            // -pl ${serviceId}: only build this module in the multi-module project
+            // -am: also make dependencies if needed
+            sh "mvn test -pl ${serviceId} -am -DskipITs -B --no-transfer-progress"
+        }
+        // Publish JUnit XML report to Jenkins (always, even if tests fail)
+        junit(
+            testResults: "${serviceId}/target/surefire-reports/*.xml",
+            allowEmptyResults: true
+        )
     }
 
+    // ------------------------------------------------------------------ //
+    // Stage Coverage: jacoco:report -> HTML + XML, publish to Jenkins     //
+    // ------------------------------------------------------------------ //
+    if (enableCoverage) {
+        stage("${serviceDisplay} - Coverage Report") {
+            // jacoco:report reads the .exec file produced by prepare-agent during mvn test
+            // -DskipTests: do NOT re-run tests, just generate the report
+            sh "mvn jacoco:report -pl ${serviceId} -am -DskipTests -B --no-transfer-progress"
+        }
+        // Publish JaCoCo HTML report via HTML Publisher plugin
+        publishHTML(target: [
+            allowMissing         : true,
+            alwaysLinkToLastBuild: true,
+            keepAll              : true,
+            reportDir            : "${serviceId}/target/site/jacoco",
+            reportFiles          : 'index.html',
+            reportName           : "JaCoCo Report - ${serviceDisplay}"
+        ])
+        // Record JaCoCo XML coverage via Coverage Plugin (modern, replaces old JaCoCo Plugin)
+        // Uses recordCoverage() step from the Coverage Plugin
+        recordCoverage(
+            tools: [[
+                parser: 'JACOCO',
+                pattern: "${serviceId}/target/site/jacoco/jacoco.xml"
+            ]],
+            id              : "jacoco-${serviceId}",
+            name            : "JaCoCo - ${serviceDisplay}",
+            ignoreParsingErrors: true
+        )
+    }
+
+    // Extra ad-hoc stages defined per-service
     commands.each { cmd ->
         stage("${serviceDisplay} - ${cmd.name}") {
             if (cmd.command) {
@@ -74,6 +116,11 @@ def runServicePipeline(service) {
 pipeline {
     agent any
 
+    tools {
+        // The name must be same as the name in Jenkins → Manage Jenkins → Tools → Maven
+        maven 'maven-3.9'
+    }
+
     // triggers {
     //     githubPush()
     // }
@@ -81,14 +128,11 @@ pipeline {
     stages {
         stage('CI Pipeline for Microservices') {
             steps {
-                withCredentials([string(credentialsId: 'snyk-api-token', variable: 'snyk-api-token')]) {
-                    script {
-                        def snykTool = tool name: 'snyk-cli', type: 'com.snyk.jenkins.SnykStep$SnykInstallation'
-                        
-                        withEnv(["PATH+SNYK=${snykTool}/bin"]) {
-                            def changedPaths = collectChangedPaths()
-                            def pomChanged = changedPaths.contains('pom.xml')
-                            def noScmContext = changedPaths.isEmpty()
+                script {
+
+                    def changedPaths = collectChangedPaths()
+                    def pomChanged   = changedPaths.contains('pom.xml')
+                    def noScmContext = changedPaths.isEmpty()
 
                             echo "Changed paths: ${changedPaths}"
 
@@ -96,8 +140,8 @@ pipeline {
 
                             microservices.each { service ->
 
-                                def serviceId = service.id
-                                def serviceDisplay = service.display
+                        def serviceId      = service.id
+                        def serviceDisplay = service.display
 
                                 branches[serviceDisplay] = {
 
