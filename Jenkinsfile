@@ -119,6 +119,9 @@ pipeline {
     tools {
         // The name must be same as the name in Jenkins → Manage Jenkins → Tools → Maven
         maven 'maven-3.9'
+        // pom.xml requires Java 25 (maven.compiler.source=25).
+        // Without this, Jenkins uses the system JDK which may be older → "release version 25 not supported"
+        jdk 'jdk-25'
     }
 
     environment {
