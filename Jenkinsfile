@@ -121,47 +121,77 @@ pipeline {
         maven 'maven-3.9'
     }
 
+    environment {
+        // Fix JENKINS-48300: suppress false-positive "wrapper script not touching log" warning
+        // that appears when Maven compiles silently for a long time with no stdout output.
+        JAVA_TOOL_OPTIONS = '-Dorg.jenkinsci.plugins.durabletask.BourneShellScript.HEARTBEAT_CHECK_INTERVAL=86400'
+
+        // Cap Maven heap to 512m per process.
+        // Running 14 services in parallel with -Xmx1024m each = ~14GB RAM → OOM.
+        // Sequential execution + 512m is safe on most CI servers.
+        MAVEN_OPTS = '-Xmx512m'
+    }
+
     // triggers {
     //     githubPush()
     // }
 
     stages {
-        stage('CI Pipeline for Microservices') {
+        // ---------------------------------------------------------------- //
+        // Stage 1: Detect which services have changed (fast, no Maven)    //
+        // ---------------------------------------------------------------- //
+        stage('Detect Changes') {
             steps {
                 script {
-
                     def changedPaths = collectChangedPaths()
                     def pomChanged   = changedPaths.contains('pom.xml')
                     def noScmContext = changedPaths.isEmpty()
 
                     echo "Changed paths: ${changedPaths}"
 
-                    def branches = [:]
+                    // Build list of services that need to run
+                    env.SERVICES_TO_RUN = microservices
+                        .findAll { service ->
+                            def serviceChanged = changedPaths.any { it.startsWith(service.id + '/') }
+                            noScmContext || pomChanged || serviceChanged
+                        }
+                        .collect { it.display }
+                        .join(',')
+
+                    echo "Services to run: ${env.SERVICES_TO_RUN ?: '(none)'}"
+                }
+            }
+        }
+
+        // ---------------------------------------------------------------- //
+        // Stage 2: Run Test + Coverage sequentially (one service at a time)//
+        // Running all in parallel saturates RAM → OOM → Jenkins restart   //
+        // ---------------------------------------------------------------- //
+        stage('Test & Coverage') {
+            steps {
+                script {
+                    def servicesToRun = env.SERVICES_TO_RUN
+                        ? env.SERVICES_TO_RUN.split(',').toList()
+                        : []
+
+                    if (servicesToRun.isEmpty()) {
+                        echo 'No services to test. Skipping.'
+                        return
+                    }
 
                     microservices.each { service ->
+                        if (!servicesToRun.contains(service.display)) return
 
-                        def serviceId      = service.id
-                        def serviceDisplay = service.display
+                        echo "========================================"
+                        echo "Running pipeline for: ${service.display}"
+                        echo "========================================"
 
-                        branches[serviceDisplay] = {
-
-                            def serviceChanged = changedPaths.any { path ->
-                                path.startsWith(serviceId + '/')
-                            }
-
-                            def shouldRun = noScmContext || pomChanged || serviceChanged
-
-                            if (!shouldRun) {
-                                echo "Skipping ${serviceDisplay} (no related changes)"
-                                return
-                            }
-
-                            echo "Running pipeline for ${serviceDisplay}"
+                        // Wrap each service in a timeout to prevent one stuck
+                        // Maven process from hanging the entire build forever
+                        timeout(time: 45, unit: 'MINUTES') {
                             runServicePipeline(service)
                         }
                     }
-
-                    parallel branches + [failFast: false]
                 }
             }
         }
