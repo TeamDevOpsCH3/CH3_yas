@@ -5,6 +5,7 @@ template: [
     display: 'Service Display Name',                                // Jenkins UI name (e.g., 'Payment Service')
     enableTest: true,                                               // set true to run mvn test + publish JUnit XML
     enableCoverage: true,                                           // set true to generate + publish JaCoCo report
+    enableSnyk: true,                                               // set true to run Snyk dependency scan
     commands: [                                                     // extra stages to run for this service
         [name: 'Stage Name', command: 'your shell command here'],
     ]
@@ -51,6 +52,7 @@ def runServicePipeline(service) {
     def serviceDisplay = service.display
     def enableTest     = service.enableTest     ?: false
     def enableCoverage = service.enableCoverage ?: false
+    def enableSnyk     = (service.enableSnyk == null) ? true : service.enableSnyk
     def commands       = service.commands       ?: []
 
     // ------------------------------------------------------------------ //
@@ -101,6 +103,27 @@ def runServicePipeline(service) {
         )
     }
 
+    // ------------------------------------------------------------------ //
+    // Stage Snyk: scan OSS vulnerabilities from service pom.xml           //
+    // ------------------------------------------------------------------ //
+    if (enableSnyk && params.ENABLE_SNYK_SCAN) {
+        stage("Snyk Vulnerability Scan - ${serviceDisplay}") {
+            if (!fileExists("${serviceId}/pom.xml")) {
+                echo "Skipping Snyk for ${serviceDisplay}: ${serviceId}/pom.xml not found"
+            } else {
+                echo "Starting Snyk scan for ${serviceDisplay}..."
+                snykSecurity(
+                    snykInstallation: 'snyk-cli',
+                    snykTokenId: 'snyk-token',
+                    targetFile: "${serviceId}/pom.xml",
+                    projectName: "yas-${serviceId}",
+                    severity: params.SNYK_SEVERITY,
+                    failOnIssues: params.SNYK_FAIL_ON_ISSUES
+                )
+            }
+        }
+    }
+
     // Extra ad-hoc stages defined per-service
     commands.each { cmd ->
         stage("${serviceDisplay} - ${cmd.name}") {
@@ -116,6 +139,24 @@ def runServicePipeline(service) {
 pipeline {
     agent any
 
+    parameters {
+        booleanParam(
+            name: 'ENABLE_SNYK_SCAN',
+            defaultValue: true,
+            description: 'Run Snyk OSS vulnerability scan per selected microservice'
+        )
+        choice(
+            name: 'SNYK_SEVERITY',
+            choices: ['low', 'medium', 'high', 'critical'],
+            description: 'Fail/report threshold for Snyk scan'
+        )
+        booleanParam(
+            name: 'SNYK_FAIL_ON_ISSUES',
+            defaultValue: false,
+            description: 'Fail build when issues at/above threshold are found'
+        )
+    }
+
     tools {
         // The name must be same as the name in Jenkins → Manage Jenkins → Tools → Maven
         maven 'maven-3.9'
@@ -129,41 +170,36 @@ pipeline {
         stage('CI Pipeline for Microservices') {
             steps {
                 script {
-
                     def changedPaths = collectChangedPaths()
                     def pomChanged   = changedPaths.contains('pom.xml')
                     def noScmContext = changedPaths.isEmpty()
 
-                            echo "Changed paths: ${changedPaths}"
+                    echo "Changed paths: ${changedPaths}"
 
-                            def branches = [:]
+                    def branches = [:]
 
-                            microservices.each { service ->
-
+                    microservices.each { service ->
                         def serviceId      = service.id
                         def serviceDisplay = service.display
 
-                                branches[serviceDisplay] = {
-
-                                    def serviceChanged = changedPaths.any { path ->
-                                        path.startsWith(serviceId + '/')
-                                    }
-
-                                    def shouldRun = noScmContext || pomChanged || serviceChanged
-
-                                    if (!shouldRun) {
-                                        echo "Skipping ${serviceDisplay} (no related changes)"
-                                        return
-                                    }
-
-                                    echo "Running pipeline for ${serviceDisplay}"
-                                    runServicePipeline(service)
-                                }
+                        branches[serviceDisplay] = {
+                            def serviceChanged = changedPaths.any { path ->
+                                path.startsWith(serviceId + '/')
                             }
 
-                            parallel branches + [failFast: false]
+                            def shouldRun = noScmContext || pomChanged || serviceChanged
+
+                            if (!shouldRun) {
+                                echo "Skipping ${serviceDisplay} (no related changes)"
+                                return
+                            }
+
+                            echo "Running pipeline for ${serviceDisplay}"
+                            runServicePipeline(service)
                         }
                     }
+
+                    parallel branches + [failFast: false]
                 }
             }
         }
