@@ -116,6 +116,11 @@ def runServicePipeline(service) {
 pipeline {
     agent any
 
+    tools {
+        // The name must be same as the name in Jenkins → Manage Jenkins → Tools → Maven
+        maven 'maven-3.9'
+    }
+
     // triggers {
     //     githubPush()
     // }
