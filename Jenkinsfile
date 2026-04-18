@@ -5,7 +5,6 @@ template: [
     display: 'Service Display Name',                                // Jenkins UI name (e.g., 'Payment Service')
     enableTest: true,                                               // set true to run mvn test + publish JUnit XML
     enableCoverage: true,                                           // set true to generate + publish JaCoCo report
-    enableSnyk: true,                                               // set true to run Snyk dependency scan
     commands: [                                                     // extra stages to run for this service
         [name: 'Stage Name', command: 'your shell command here'],
     ]
@@ -52,7 +51,6 @@ def runServicePipeline(service) {
     def serviceDisplay = service.display
     def enableTest     = service.enableTest     ?: false
     def enableCoverage = service.enableCoverage ?: false
-    def enableSnyk     = (service.enableSnyk == null) ? true : service.enableSnyk
     def commands       = service.commands       ?: []
 
     // ------------------------------------------------------------------ //
@@ -60,12 +58,8 @@ def runServicePipeline(service) {
     // ------------------------------------------------------------------ //
     if (enableTest) {
         stage("${serviceDisplay} - Test") {
-            // -DskipITs: skip integration tests (handled by failsafe, not surefire)
-            // -pl ${serviceId}: only build this module in the multi-module project
-            // -am: also make dependencies if needed
             sh "mvn test -pl ${serviceId} -am -DskipITs -B --no-transfer-progress"
         }
-        // Publish JUnit XML report to Jenkins (always, even if tests fail)
         junit(
             testResults: "${serviceId}/target/surefire-reports/*.xml",
             allowEmptyResults: true
@@ -77,11 +71,8 @@ def runServicePipeline(service) {
     // ------------------------------------------------------------------ //
     if (enableCoverage) {
         stage("${serviceDisplay} - Coverage Report") {
-            // jacoco:report reads the .exec file produced by prepare-agent during mvn test
-            // -DskipTests: do NOT re-run tests, just generate the report
             sh "mvn jacoco:report -pl ${serviceId} -am -DskipTests -B --no-transfer-progress"
         }
-        // Publish JaCoCo HTML report via HTML Publisher plugin
         publishHTML(target: [
             allowMissing         : true,
             alwaysLinkToLastBuild: true,
@@ -90,8 +81,6 @@ def runServicePipeline(service) {
             reportFiles          : 'index.html',
             reportName           : "JaCoCo Report - ${serviceDisplay}"
         ])
-        // Record JaCoCo XML coverage via Coverage Plugin (modern, replaces old JaCoCo Plugin)
-        // Uses recordCoverage() step from the Coverage Plugin
         recordCoverage(
             tools: [[
                 parser: 'JACOCO',
@@ -101,27 +90,6 @@ def runServicePipeline(service) {
             name            : "JaCoCo - ${serviceDisplay}",
             ignoreParsingErrors: true
         )
-    }
-
-    // ------------------------------------------------------------------ //
-    // Stage Snyk: scan OSS vulnerabilities from service pom.xml           //
-    // ------------------------------------------------------------------ //
-    if (enableSnyk && params.ENABLE_SNYK_SCAN) {
-        stage("Snyk Vulnerability Scan - ${serviceDisplay}") {
-            if (!fileExists("${serviceId}/pom.xml")) {
-                echo "Skipping Snyk for ${serviceDisplay}: ${serviceId}/pom.xml not found"
-            } else {
-                echo "Starting Snyk scan for ${serviceDisplay}..."
-                snykSecurity(
-                    snykInstallation: 'snyk-cli',
-                    snykTokenId: 'snyk-token',
-                    targetFile: "${serviceId}/pom.xml",
-                    projectName: "yas-${serviceId}",
-                    severity: params.SNYK_SEVERITY,
-                    failOnIssues: params.SNYK_FAIL_ON_ISSUES
-                )
-            }
-        }
     }
 
     // Extra ad-hoc stages defined per-service
@@ -139,27 +107,41 @@ def runServicePipeline(service) {
 pipeline {
     agent any
 
-    parameters {
-        booleanParam(
-            name: 'ENABLE_SNYK_SCAN',
-            defaultValue: true,
-            description: 'Run Snyk OSS vulnerability scan per selected microservice'
-        )
-        choice(
-            name: 'SNYK_SEVERITY',
-            choices: ['low', 'medium', 'high', 'critical'],
-            description: 'Fail/report threshold for Snyk scan'
-        )
-        booleanParam(
-            name: 'SNYK_FAIL_ON_ISSUES',
-            defaultValue: false,
-            description: 'Fail build when issues at/above threshold are found'
-        )
+    tools {
+        maven 'maven-3.9'
+        jdk 'jdk-25'
     }
 
-    tools {
-        // The name must be same as the name in Jenkins → Manage Jenkins → Tools → Maven
-        maven 'maven-3.9'
+    environment {
+        // Fix JENKINS-48300: suppress false-positive "wrapper script not touching log" warning
+        JAVA_TOOL_OPTIONS = '-Dorg.jenkinsci.plugins.durabletask.BourneShellScript.HEARTBEAT_CHECK_INTERVAL=86400'
+
+        // [FIX OOM] Cap Maven heap to 512m per process.
+        // Running services in parallel with default -Xmx1024m = RAM exhausted → crash.
+        MAVEN_OPTS = '-Xmx512m'
+    }
+
+    parameters {
+        booleanParam(
+            name        : 'FORCE_RUN_ALL',
+            defaultValue: false,
+            description : 'Force run Test + Coverage for ALL services regardless of which files changed'
+        )
+        booleanParam(
+            name        : 'ENABLE_SNYK_SCAN',
+            defaultValue: false,
+            description : 'Run Snyk OSS vulnerability scan once for the entire project (heavy — enable manually)'
+        )
+        choice(
+            name        : 'SNYK_SEVERITY',
+            choices     : ['low', 'medium', 'high', 'critical'],
+            description : 'Fail/report threshold for Snyk scan'
+        )
+        booleanParam(
+            name        : 'SNYK_FAIL_ON_ISSUES',
+            defaultValue: false,
+            description : 'Fail build when Snyk finds issues at/above threshold'
+        )
     }
 
     // triggers {
@@ -167,7 +149,10 @@ pipeline {
     // }
 
     stages {
-        stage('CI Pipeline for Microservices') {
+        // ---------------------------------------------------------------- //
+        // Stage 1: Detect which services have changed (fast, no Maven)     //
+        // ---------------------------------------------------------------- //
+        stage('Detect Changes') {
             steps {
                 script {
                     def changedPaths = collectChangedPaths()
@@ -176,31 +161,71 @@ pipeline {
 
                     echo "Changed paths: ${changedPaths}"
 
-                    def branches = [:]
+                    env.SERVICES_TO_RUN = microservices
+                        .findAll { service ->
+                            def serviceChanged = changedPaths.any { it.startsWith(service.id + '/') }
+                            params.FORCE_RUN_ALL || noScmContext || pomChanged || serviceChanged
+                        }
+                        .collect { it.display }
+                        .join(',')
+
+                    echo "Force run all: ${params.FORCE_RUN_ALL}"
+                    echo "Services to run: ${env.SERVICES_TO_RUN ?: '(none)'}"
+                }
+            }
+        }
+
+        // ---------------------------------------------------------------- //
+        // Stage 2: Run Test + Coverage SEQUENTIALLY (one service at a time)//
+        // [FIX OOM] Parallel execution saturates RAM → OOM → Jenkins crash //
+        // ---------------------------------------------------------------- //
+        stage('Test & Coverage') {
+            steps {
+                script {
+                    def servicesToRun = env.SERVICES_TO_RUN
+                        ? env.SERVICES_TO_RUN.split(',').toList()
+                        : []
+
+                    if (servicesToRun.isEmpty()) {
+                        echo 'No services to test. Skipping.'
+                        return
+                    }
 
                     microservices.each { service ->
-                        def serviceId      = service.id
-                        def serviceDisplay = service.display
+                        if (!servicesToRun.contains(service.display)) return
 
-                        branches[serviceDisplay] = {
-                            def serviceChanged = changedPaths.any { path ->
-                                path.startsWith(serviceId + '/')
-                            }
+                        echo "========================================"
+                        echo "Running pipeline for: ${service.display}"
+                        echo "========================================"
 
-                            def shouldRun = noScmContext || pomChanged || serviceChanged
-
-                            if (!shouldRun) {
-                                echo "Skipping ${serviceDisplay} (no related changes)"
-                                return
-                            }
-
-                            echo "Running pipeline for ${serviceDisplay}"
+                        // Timeout per service to prevent stuck Maven from hanging forever
+                        timeout(time: 45, unit: 'MINUTES') {
                             runServicePipeline(service)
                         }
                     }
-
-                    parallel branches + [failFast: false]
                 }
+            }
+        }
+
+        // ---------------------------------------------------------------- //
+        // Stage 3: Snyk scan ONCE for entire project (not per service)     //
+        // [FIX OOM] Scanning per-service = 19x Snyk processes → crash      //
+        // Only runs when ENABLE_SNYK_SCAN = true (manual trigger)          //
+        // ---------------------------------------------------------------- //
+        stage('Snyk Security Scan') {
+            when {
+                expression { params.ENABLE_SNYK_SCAN == true }
+            }
+            steps {
+                echo "Running Snyk scan for entire project..."
+                snykSecurity(
+                    snykInstallation: 'snyk-cli',
+                    snykTokenId     : 'snyk-token',
+                    targetFile      : 'pom.xml',
+                    projectName     : 'yas-monorepo',
+                    severity        : params.SNYK_SEVERITY,
+                    failOnIssues    : params.SNYK_FAIL_ON_ISSUES
+                )
             }
         }
     }
