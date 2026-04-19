@@ -12,25 +12,25 @@ template: [
 */
 
 def microservices = [
-    [id: 'customer',       display: 'Customer Service',       enableTest: true,  enableCoverage: true,  commands: []],
-    [id: 'cart',           display: 'Cart Service',           enableTest: true,  enableCoverage: true,  commands: []],
-    [id: 'backoffice-bff', display: 'Backoffice BFF Service', enableTest: false, enableCoverage: false, commands: []],
-    [id: 'inventory',      display: 'Inventory Service',      enableTest: true,  enableCoverage: true,  commands: []],
-    [id: 'location',       display: 'Location Service',       enableTest: true,  enableCoverage: true,  commands: []],
-    [id: 'media',          display: 'Media Service',          enableTest: true,  enableCoverage: true,  commands: []],
-    [id: 'order',          display: 'Order Service',          enableTest: true,  enableCoverage: true,  commands: []],
-    [id: 'payment-paypal', display: 'Payment Paypal Service', enableTest: true,  enableCoverage: true,  commands: []],
-    [id: 'payment',        display: 'Payment Service',        enableTest: true,  enableCoverage: true,  commands: []],
-    [id: 'product',        display: 'Product Service',        enableTest: true,  enableCoverage: true,  commands: []],
-    [id: 'promotion',      display: 'Promotion Service',      enableTest: true,  enableCoverage: true,  commands: []],
-    [id: 'rating',         display: 'Rating Service',         enableTest: true,  enableCoverage: true,  commands: []],
-    [id: 'search',         display: 'Search Service',         enableTest: false, enableCoverage: false, commands: []],
-    [id: 'storefront-bff', display: 'Storefront BFF Service', enableTest: false, enableCoverage: false, commands: []],
-    [id: 'tax',            display: 'Tax Service',            enableTest: true,  enableCoverage: true,  commands: []],
-    [id: 'webhook',        display: 'Webhook Service',        enableTest: true,  enableCoverage: true,  commands: []],
-    [id: 'sampledata',     display: 'Sampledata Service',     enableTest: false, enableCoverage: false, commands: []],
-    [id: 'recommendation', display: 'Recommendation Service', enableTest: false, enableCoverage: false, commands: []],
-    [id: 'delivery',       display: 'Delivery Service',       enableTest: true,  enableCoverage: true,  commands: []],
+    [id: 'customer',       display: 'Customer Service',       enableTest: true,  enableCoverage: true,  enableBuild: true,  commands: []],
+    [id: 'cart',           display: 'Cart Service',           enableTest: true,  enableCoverage: true,  enableBuild: true,  commands: []],
+    [id: 'backoffice-bff', display: 'Backoffice BFF Service', enableTest: false, enableCoverage: false, enableBuild: true,  commands: []],
+    [id: 'inventory',      display: 'Inventory Service',      enableTest: true,  enableCoverage: true,  enableBuild: true,  commands: []],
+    [id: 'location',       display: 'Location Service',       enableTest: true,  enableCoverage: true,  enableBuild: true,  commands: []],
+    [id: 'media',          display: 'Media Service',          enableTest: true,  enableCoverage: true,  enableBuild: true,  commands: []],
+    [id: 'order',          display: 'Order Service',          enableTest: true,  enableCoverage: true,  enableBuild: true,  commands: []],
+    [id: 'payment-paypal', display: 'Payment Paypal Service', enableTest: true,  enableCoverage: true,  enableBuild: true,  commands: []],
+    [id: 'payment',        display: 'Payment Service',        enableTest: true,  enableCoverage: true,  enableBuild: true,  commands: []],
+    [id: 'product',        display: 'Product Service',        enableTest: true,  enableCoverage: true,  enableBuild: true,  commands: []],
+    [id: 'promotion',      display: 'Promotion Service',      enableTest: true,  enableCoverage: true,  enableBuild: true,  commands: []],
+    [id: 'rating',         display: 'Rating Service',         enableTest: true,  enableCoverage: true,  enableBuild: true,  commands: []],
+    [id: 'search',         display: 'Search Service',         enableTest: false, enableCoverage: false, enableBuild: true,  commands: []],
+    [id: 'storefront-bff', display: 'Storefront BFF Service', enableTest: false, enableCoverage: false, enableBuild: true,  commands: []],
+    [id: 'tax',            display: 'Tax Service',            enableTest: true,  enableCoverage: true,  enableBuild: true,  commands: []],
+    [id: 'webhook',        display: 'Webhook Service',        enableTest: true,  enableCoverage: true,  enableBuild: true,  commands: []],
+    [id: 'sampledata',     display: 'Sampledata Service',     enableTest: false, enableCoverage: false, enableBuild: false, commands: []],
+    [id: 'recommendation', display: 'Recommendation Service', enableTest: false, enableCoverage: false, enableBuild: false, commands: []],
+    [id: 'delivery',       display: 'Delivery Service',       enableTest: true,  enableCoverage: true,  enableBuild: true,  commands: []],
 ]
 
 @NonCPS
@@ -51,6 +51,7 @@ def runServicePipeline(service) {
     def serviceDisplay = service.display
     def enableTest     = service.enableTest     ?: false
     def enableCoverage = service.enableCoverage ?: false
+    def enableBuild    = service.enableBuild    ?: false
     def commands       = service.commands       ?: []
 
     // ------------------------------------------------------------------ //
@@ -92,6 +93,17 @@ def runServicePipeline(service) {
         )
     }
 
+    if (enableBuild) {
+        stage("${serviceDisplay} - Build") {
+            sh "mvn package -pl ${serviceId} -am -DskipTests -B --no-transfer-progress"
+        }
+        archiveArtifacts(
+            artifacts        : "${serviceId}/target/*.jar",
+            fingerprint      : true,
+            allowEmptyArchive: true
+        )
+    }
+    
     // Extra ad-hoc stages defined per-service
     commands.each { cmd ->
         stage("${serviceDisplay} - ${cmd.name}") {
