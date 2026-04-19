@@ -149,9 +149,16 @@ pipeline {
 
     stages {
         stage('Gitleaks Security Scan') {
-            script {
-                echo "Running Gitleaks security scan on the entire codebase..."
-                sh "docker run --rm -v \$(pwd):/code zricethezann/gitleaks:latest detect --source=/code --verbose --exit-code=1"
+            steps {
+                script {
+                    echo "Running Gitleaks security scan on the entire codebase..."
+                    /*
+                    Using the official Gitleaks Docker image to run the scan in a container.
+                    The --exit-code=1 flag makes the command return a non-zero exit code if any secrets are found,
+                    which will fail the Jenkins build immediately.
+                    */
+                    sh "docker run --rm -v \$(pwd):/code zricethezann/gitleaks:latest detect --source=/code --verbose --exit-code=1"
+                }
             }
         }
     }
