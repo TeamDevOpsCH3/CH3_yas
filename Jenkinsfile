@@ -148,6 +148,15 @@ pipeline {
     // }
 
     stages {
+        stage('Gitleaks Security Scan') {
+            script {
+                echo "Running Gitleaks security scan on the entire codebase..."
+                sh "docker run --rm -v \$(pwd):/code zricethezann/gitleaks:latest detect --source=/code --verbose --exit-code=1"
+            }
+        }
+    }
+
+    stages {
         // ---------------------------------------------------------------- //
         // Stage 1: Detect which services have changed (fast, no Maven)    //
         // ---------------------------------------------------------------- //
