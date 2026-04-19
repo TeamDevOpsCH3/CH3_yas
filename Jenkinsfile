@@ -109,15 +109,19 @@ pipeline {
 
     tools {
         maven 'maven-3.9'
+        // pom.xml requires Java 25 (maven.compiler.source=25).
+        // Without this, Jenkins uses the system JDK which may be older → "release version 25 not supported"
         jdk 'jdk-25'
     }
 
     environment {
         // Fix JENKINS-48300: suppress false-positive "wrapper script not touching log" warning
+        // that appears when Maven compiles silently for a long time with no stdout output.
         JAVA_TOOL_OPTIONS = '-Dorg.jenkinsci.plugins.durabletask.BourneShellScript.HEARTBEAT_CHECK_INTERVAL=86400'
 
-        // [FIX OOM] Cap Maven heap to 512m per process.
-        // Running services in parallel with default -Xmx1024m = RAM exhausted → crash.
+        // Cap Maven heap to 512m per process.
+        // Running 14 services in parallel with -Xmx1024m each = ~14GB RAM → OOM.
+        // Sequential execution + 512m is safe on most CI servers.
         MAVEN_OPTS = '-Xmx512m'
     }
 
@@ -161,6 +165,7 @@ pipeline {
 
                     echo "Changed paths: ${changedPaths}"
 
+                    // Build list of services that need to run
                     env.SERVICES_TO_RUN = microservices
                         .findAll { service ->
                             def serviceChanged = changedPaths.any { it.startsWith(service.id + '/') }
@@ -176,8 +181,8 @@ pipeline {
         }
 
         // ---------------------------------------------------------------- //
-        // Stage 2: Run Test + Coverage SEQUENTIALLY (one service at a time)//
-        // [FIX OOM] Parallel execution saturates RAM → OOM → Jenkins crash //
+        // Stage 2: Run Test + Coverage sequentially (one service at a time)//
+        // Running all in parallel saturates RAM → OOM → Jenkins restart   //
         // ---------------------------------------------------------------- //
         stage('Test & Coverage') {
             steps {
@@ -198,7 +203,8 @@ pipeline {
                         echo "Running pipeline for: ${service.display}"
                         echo "========================================"
 
-                        // Timeout per service to prevent stuck Maven from hanging forever
+                        // Wrap each service in a timeout to prevent one stuck
+                        // Maven process from hanging the entire build forever
                         timeout(time: 45, unit: 'MINUTES') {
                             runServicePipeline(service)
                         }

@@ -1,5 +1,6 @@
 services:
   jenkins:
+    restart: always
     build: .
     container_name: jenkins
     ports:
