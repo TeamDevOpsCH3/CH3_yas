@@ -1,0 +1,6 @@
+workflow-multibranch
+junit
+htmlpublisher
+coverage
+github-branch-source
+workflow-aggregator
