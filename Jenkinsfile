@@ -58,12 +58,8 @@ def runServicePipeline(service) {
     // ------------------------------------------------------------------ //
     if (enableTest) {
         stage("${serviceDisplay} - Test") {
-            // -DskipITs: skip integration tests (handled by failsafe, not surefire)
-            // -pl ${serviceId}: only build this module in the multi-module project
-            // -am: also make dependencies if needed
             sh "mvn test -pl ${serviceId} -am -DskipITs -B --no-transfer-progress"
         }
-        // Publish JUnit XML report to Jenkins (always, even if tests fail)
         junit(
             testResults: "${serviceId}/target/surefire-reports/*.xml",
             allowEmptyResults: true
@@ -75,11 +71,8 @@ def runServicePipeline(service) {
     // ------------------------------------------------------------------ //
     if (enableCoverage) {
         stage("${serviceDisplay} - Coverage Report") {
-            // jacoco:report reads the .exec file produced by prepare-agent during mvn test
-            // -DskipTests: do NOT re-run tests, just generate the report
             sh "mvn jacoco:report -pl ${serviceId} -am -DskipTests -B --no-transfer-progress"
         }
-        // Publish JaCoCo HTML report via HTML Publisher plugin
         publishHTML(target: [
             allowMissing         : true,
             alwaysLinkToLastBuild: true,
@@ -88,8 +81,6 @@ def runServicePipeline(service) {
             reportFiles          : 'index.html',
             reportName           : "JaCoCo Report - ${serviceDisplay}"
         ])
-        // Record JaCoCo XML coverage via Coverage Plugin (modern, replaces old JaCoCo Plugin)
-        // Uses recordCoverage() step from the Coverage Plugin
         recordCoverage(
             tools: [[
                 parser: 'JACOCO',
@@ -117,7 +108,6 @@ pipeline {
     agent any
 
     tools {
-        // The name must be same as the name in Jenkins → Manage Jenkins → Tools → Maven
         maven 'maven-3.9'
         // pom.xml requires Java 25 (maven.compiler.source=25).
         // Without this, Jenkins uses the system JDK which may be older → "release version 25 not supported"
@@ -141,6 +131,21 @@ pipeline {
             defaultValue: false,
             description : 'Force run Test + Coverage for ALL services regardless of which files changed'
         )
+        booleanParam(
+            name        : 'ENABLE_SNYK_SCAN',
+            defaultValue: false,
+            description : 'Run Snyk OSS vulnerability scan once for the entire project (heavy — enable manually)'
+        )
+        choice(
+            name        : 'SNYK_SEVERITY',
+            choices     : ['low', 'medium', 'high', 'critical'],
+            description : 'Fail/report threshold for Snyk scan'
+        )
+        booleanParam(
+            name        : 'SNYK_FAIL_ON_ISSUES',
+            defaultValue: false,
+            description : 'Fail build when Snyk finds issues at/above threshold'
+        )
     }
 
     // triggers {
@@ -149,7 +154,7 @@ pipeline {
 
     stages {
         // ---------------------------------------------------------------- //
-        // Stage 1: Detect which services have changed (fast, no Maven)    //
+        // Stage 1: Detect which services have changed (fast, no Maven)     //
         // ---------------------------------------------------------------- //
         stage('Detect Changes') {
             steps {
@@ -205,6 +210,28 @@ pipeline {
                         }
                     }
                 }
+            }
+        }
+
+        // ---------------------------------------------------------------- //
+        // Stage 3: Snyk scan ONCE for entire project (not per service)     //
+        // [FIX OOM] Scanning per-service = 19x Snyk processes → crash      //
+        // Only runs when ENABLE_SNYK_SCAN = true (manual trigger)          //
+        // ---------------------------------------------------------------- //
+        stage('Snyk Security Scan') {
+            when {
+                expression { params.ENABLE_SNYK_SCAN == true }
+            }
+            steps {
+                echo "Running Snyk scan for entire project..."
+                snykSecurity(
+                    snykInstallation: 'snyk-cli',
+                    snykTokenId     : 'snyk-token',
+                    targetFile      : 'pom.xml',
+                    projectName     : 'yas-monorepo',
+                    severity        : params.SNYK_SEVERITY,
+                    failOnIssues    : params.SNYK_FAIL_ON_ISSUES
+                )
             }
         }
     }
