@@ -9,7 +9,7 @@ template: [
         [name: 'Stage Name', command: 'your shell command here'],
     ]
 ]
-*/
+*/ 
 
 def microservices = [
     [id: 'customer',       display: 'Customer Service',       enableTest: true,  enableCoverage: true,  commands: []],
