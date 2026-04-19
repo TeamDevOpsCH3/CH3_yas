@@ -93,6 +93,18 @@ def runServicePipeline(service) {
         )
     }
 
+    // ------------------------------------------------------------------ //
+    // Stage SonarCloud Scan                                               //
+    // ------------------------------------------------------------------ //
+    stage("${serviceDisplay} - SonarCloud Scan") {
+        withCredentials([string(credentialsId: 'sonar-token', variable: 'SONAR_TOKEN')]) {
+            sh """
+                mvn sonar:sonar -pl ${serviceId} -am -DskipTests \
+                  -Dsonar.token=\$SONAR_TOKEN
+            """
+        }
+    }
+
     if (enableBuild) {
         stage("${serviceDisplay} - Build") {
             sh "mvn package -pl ${serviceId} -am -DskipTests -B --no-transfer-progress"
@@ -103,7 +115,7 @@ def runServicePipeline(service) {
             allowEmptyArchive: true
         )
     }
-    
+
     // Extra ad-hoc stages defined per-service
     commands.each { cmd ->
         stage("${serviceDisplay} - ${cmd.name}") {
