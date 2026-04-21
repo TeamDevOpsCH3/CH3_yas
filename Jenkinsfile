@@ -97,10 +97,13 @@ def runServicePipeline(service) {
     // Stage SonarCloud Scan                                               //
     // ------------------------------------------------------------------ //
     stage("${serviceDisplay} - SonarCloud Scan") {
-        withCredentials([string(credentialsId: 'sonar-token', variable: 'SONAR_TOKEN')]) {
+        dir(serviceId) {
             sh """
-                mvn sonar:sonar -pl ${serviceId} -am -DskipTests \
-                  -Dsonar.token=\$SONAR_TOKEN
+                ./mvnw clean verify sonar:sonar \
+                  -Dsonar.projectKey=TeamDevOpsCH3_CH3_yas \
+                  -Dsonar.organization=teamdevopsch3 \
+                  -Dsonar.host.url=https://sonarcloud.io \
+                  -Dsonar.login=\$SONAR_TOKEN
             """
         }
     }
@@ -147,6 +150,8 @@ pipeline {
         // Running 14 services in parallel with -Xmx1024m each = ~14GB RAM → OOM.
         // Sequential execution + 512m is safe on most CI servers.
         MAVEN_OPTS = '-Xmx512m'
+
+        SONAR_TOKEN = credentials('SONAR_TOKEN')
     }
 
     parameters {
@@ -223,9 +228,9 @@ pipeline {
                     microservices.each { service ->
                         if (!servicesToRun.contains(service.display)) return
 
-                        echo "========================================"
+                        echo '========================================'
                         echo "Running pipeline for: ${service.display}"
-                        echo "========================================"
+                        echo '========================================'
 
                         // Wrap each service in a timeout to prevent one stuck
                         // Maven process from hanging the entire build forever
@@ -247,7 +252,7 @@ pipeline {
                 expression { params.ENABLE_SNYK_SCAN == true }
             }
             steps {
-                echo "Running Snyk scan for entire project..."
+                echo 'Running Snyk scan for entire project...'
                 snykSecurity(
                     snykInstallation: 'snyk-cli',
                     snykTokenId     : 'snyk-token',
