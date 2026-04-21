@@ -190,15 +190,19 @@ pipeline {
                 script {
                     def changedPaths = collectChangedPaths()
                     def pomChanged   = changedPaths.contains('pom.xml')
+                    def pipelineChanged = changedPaths.contains('Jenkinsfile')
                     def noScmContext = changedPaths.isEmpty()
 
                     echo "Changed paths: ${changedPaths}"
+                    echo "pom.xml changed: ${pomChanged}"
+                    echo "Jenkinsfile changed: ${pipelineChanged}"
+                    echo "No SCM context: ${noScmContext}"
 
                     // Build list of services that need to run
                     env.SERVICES_TO_RUN = microservices
                         .findAll { service ->
                             def serviceChanged = changedPaths.any { it.startsWith(service.id + '/') }
-                            params.FORCE_RUN_ALL || noScmContext || pomChanged || serviceChanged
+                            params.FORCE_RUN_ALL || noScmContext || pomChanged || pipelineChanged || serviceChanged
                         }
                         .collect { it.display }
                         .join(',')
