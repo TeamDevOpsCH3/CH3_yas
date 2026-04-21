@@ -97,13 +97,26 @@ def runServicePipeline(service) {
     // Stage SonarCloud Scan                                               //
     // ------------------------------------------------------------------ //
     stage("${serviceDisplay} - SonarCloud Scan") {
-        dir(serviceId) {
+        dir("${env.WORKSPACE}") {
             sh """
-                ./mvnw clean verify sonar:sonar \
-                  -Dsonar.projectKey=TeamDevOpsCH3_CH3_yas \
-                  -Dsonar.organization=teamdevopsch3 \
-                  -Dsonar.host.url=https://sonarcloud.io \
-                  -Dsonar.login=\$SONAR_TOKEN
+                set -e
+
+                if [ -x "./mvnw" ]; then
+                MVN_CMD="./mvnw"
+                elif [ -f "./mvnw" ]; then
+                chmod +x ./mvnw
+                MVN_CMD="./mvnw"
+                else
+                MVN_CMD="mvn"
+                fi
+
+                \$MVN_CMD clean verify sonar:sonar \\
+                -pl ${serviceId} -am \\
+                -DskipTests -DskipITs \\
+                -Dsonar.projectKey=TeamDevOpsCH3_CH3_yas \\
+                -Dsonar.organization=teamdevopsch3 \\
+                -Dsonar.host.url=https://sonarcloud.io \\
+                -Dsonar.login=\$SONAR_TOKEN
             """
         }
     }
