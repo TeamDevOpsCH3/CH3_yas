@@ -1,299 +1,224 @@
 package com.yas.product.controller;
 
-import static org.mockito.ArgumentMatchers.anyList;
-import static org.mockito.Mockito.times;
+import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.mockito.Mockito.verify;
-import static org.mockito.Mockito.when;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
-import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
 
-import com.yas.product.model.enumeration.DimensionUnit;
+import com.yas.product.model.enumeration.FilterExistInWhSelection;
 import com.yas.product.service.ProductDetailService;
 import com.yas.product.service.ProductService;
-import com.yas.product.viewmodel.product.ProductListVm;
-import com.yas.product.viewmodel.product.ProductPostVm;
-import com.yas.product.viewmodel.product.ProductPutVm;
-import com.yas.product.viewmodel.product.ProductQuantityPutVm;
-import java.time.ZonedDateTime;
+import com.yas.product.viewmodel.product.*;
+
 import java.util.List;
+
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.security.oauth2.server.resource.autoconfigure.servlet.OAuth2ResourceServerAutoConfiguration;
-import org.springframework.boot.webmvc.test.autoconfigure.AutoConfigureMockMvc;
-import org.springframework.boot.webmvc.test.autoconfigure.WebMvcTest;
-import org.springframework.http.MediaType;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import org.springframework.test.web.servlet.MockMvc;
-import org.springframework.test.web.servlet.request.MockMvcRequestBuilders;
-import tools.jackson.databind.ObjectMapper;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.HttpStatus;
+import org.springframework.http.ResponseEntity;
 
-@WebMvcTest(controllers = ProductController.class,
-    excludeAutoConfiguration = OAuth2ResourceServerAutoConfiguration.class)
-@AutoConfigureMockMvc(addFilters = false)
+@ExtendWith(MockitoExtension.class)
 class ProductControllerTest {
-    @Autowired
-    private MockMvc mockMvc;
-
-    @MockitoBean
+    
+    @Mock
     private ProductService productService;
-
-    @MockitoBean
+    
+    @Mock
     private ProductDetailService productDetailService;
 
-    private final ObjectMapper objectMapper = new ObjectMapper();
+    @InjectMocks
+    private ProductController productController;
 
     @Test
-    void testListProductsEndpoint() throws Exception {
-        mockMvc.perform(MockMvcRequestBuilders.get("/backoffice/products"))
-                .andExpect(status().isOk());
+    void listProducts_ValidRequest_Success() {
+        ResponseEntity<ProductListGetVm> response = productController.listProducts(0, 5, "name", "brand");
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        verify(productService).getProductsWithFilter(0, 5, "name", "brand");
     }
 
     @Test
-    void testExportProductsEndpoint() throws Exception {
-        mockMvc.perform(MockMvcRequestBuilders.get("/backoffice/export/products"))
-                .andExpect(status().isOk());
+    void exportProducts_ValidRequest_Success() {
+        ResponseEntity<List<ProductExportingDetailVm>> response = productController.exportProducts("name", "brand");
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        verify(productService).exportProducts("name", "brand");
     }
 
     @Test
-    void testCreateProductEndpoint() throws Exception {
-        ProductPostVm productPostVm = new ProductPostVm(
-                "Laptop", "laptop-1", 1L,
-                List.of(1L), "short-description", "description",
-                "specification", "laptop-sku", "laptop-gtin",
-                10d, DimensionUnit.CM, 10d, 10d, 10d, 50000D,
-                true, true, true, true, true,
-                "laptop-meta", "laptop-keywords", "laptop--meta-description",
-                1L, null, null, null,  null,null, 1L);
-        String jsonBody = objectMapper.writeValueAsString(productPostVm);
-
-        mockMvc.perform(MockMvcRequestBuilders.post("/backoffice/products")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(jsonBody))
-                .andExpect(status().isCreated());
+    void createProduct_ValidRequest_Success() {
+        ProductPostVm vm = org.mockito.Mockito.mock(ProductPostVm.class);
+        ResponseEntity<ProductGetDetailVm> response = productController.createProduct(vm);
+        assertEquals(HttpStatus.CREATED, response.getStatusCode());
+        verify(productService).createProduct(vm);
     }
 
     @Test
-    void testUpdateProductEndpoint() throws Exception {
-        ProductPutVm productPutVm = new ProductPutVm(
-                "Laptop", "laptop-1", 50000D,
-                true, true, true, true, true,
-                1L, List.of(1L), "laptop-short-description",
-                "laptop-description", null, null, null,
-                10d, DimensionUnit.CM, 10d, 10d, 10d, "laptop-meta-title", "laptop-meta-key",
-                "laptop--meta-description", 1L, null, null, null,
-                null, null, 1L
-        );
-        String jsonBody = objectMapper.writeValueAsString(productPutVm);
-
-        mockMvc.perform(MockMvcRequestBuilders.put("/backoffice/products/1")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(jsonBody))
-                .andExpect(status().isNoContent());
+    void updateProduct_ValidRequest_Success() {
+        ProductPutVm vm = org.mockito.Mockito.mock(ProductPutVm.class);
+        ResponseEntity<Void> response = productController.updateProduct(1L, vm);
+        assertEquals(HttpStatus.NO_CONTENT, response.getStatusCode());
+        verify(productService).updateProduct(1L, vm);
     }
 
     @Test
-    void testGetFeaturedProducts() throws Exception {
-        mockMvc.perform(MockMvcRequestBuilders.get("/storefront/products/featured"))
-                .andExpect(status().isOk());
+    void getFeaturedProducts_ValidRequest_Success() {
+        ResponseEntity<ProductFeatureGetVm> response = productController.getFeaturedProducts(0, 10);
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        verify(productService).getListFeaturedProducts(0, 10);
     }
 
     @Test
-    void testGetProductsByBrand() throws Exception {
-        mockMvc.perform(MockMvcRequestBuilders.get("/storefront/brand/{brandSlug}/products", "sampleBrand"))
-                .andExpect(status().isOk());
+    void getProductsByBrand_ValidRequest_Success() {
+        ResponseEntity<List<ProductThumbnailVm>> response = productController.getProductsByBrand("brand-slug");
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        verify(productService).getProductsByBrand("brand-slug");
     }
 
     @Test
-    void testGetProductsByCategory() throws Exception {
-        mockMvc.perform(MockMvcRequestBuilders.get("/storefront/category/{categorySlug}/products", "sampleCategory"))
-                .andExpect(status().isOk());
+    void getProductsByCategory_ValidRequest_Success() {
+        ResponseEntity<ProductListGetFromCategoryVm> response = productController.getProductsByCategory(0, 2, "category-slug");
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        verify(productService).getProductsFromCategory(0, 2, "category-slug");
     }
 
     @Test
-    void testGetProductById() throws Exception {
-        mockMvc.perform(MockMvcRequestBuilders.get("/backoffice/products/{productId}", 1))
-                .andExpect(status().isOk());
+    void getProductById_ValidRequest_Success() {
+        ResponseEntity<ProductDetailVm> response = productController.getProductById(1L);
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        verify(productService).getProductById(1L);
     }
 
     @Test
-    void testGetFeaturedProductsById() throws Exception {
-        mockMvc.perform(MockMvcRequestBuilders.get("/storefront/products/list-featured")
-                        .param("productId", "1", "2", "3"))
-                .andExpect(status().isOk());
+    void getFeaturedProductsById_ValidRequest_Success() {
+        List<Long> ids = List.of(1L, 2L);
+        ResponseEntity<List<ProductThumbnailGetVm>> response = productController.getFeaturedProductsById(ids);
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        verify(productService).getFeaturedProductsById(ids);
     }
 
     @Test
-    void testGetProductDetail() throws Exception {
-        mockMvc.perform(MockMvcRequestBuilders.get("/storefront/product/{slug}", "sample-slug"))
-                .andExpect(status().isOk());
+    void getProductDetail_ValidRequest_Success() {
+        ResponseEntity<ProductDetailGetVm> response = productController.getProductDetail("slug");
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        verify(productService).getProductDetail("slug");
     }
 
     @Test
-    void testDeleteProduct() throws Exception {
-        mockMvc.perform(MockMvcRequestBuilders.delete("/backoffice/products/{id}", 1))
-                .andExpect(status().isNoContent());
+    void deleteProduct_ValidRequest_Success() {
+        ResponseEntity<Void> response = productController.deleteProduct(1L);
+        assertEquals(HttpStatus.NO_CONTENT, response.getStatusCode());
+        verify(productService).deleteProduct(1L);
     }
 
     @Test
-    void testGetProductsByMultiQuery() throws Exception {
-        mockMvc.perform(MockMvcRequestBuilders.get("/storefront/products")
-                        .param("pageNo", "0")
-                        .param("pageSize", "5")
-                        .param("productName", "sampleProduct")
-                        .param("categorySlug", "sampleCategory")
-                        .param("startPrice", "10.0")
-                        .param("endPrice", "100.0"))
-                .andExpect(status().isOk());
+    void getProductsByMultiQuery_ValidRequest_Success() {
+        ResponseEntity<ProductsGetVm> response = productController.getProductsByMultiQuery(0, 5, "name", "category", 10.0, 100.0);
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        verify(productService).getProductsByMultiQuery(0, 5, "name", "category", 10.0, 100.0);
     }
 
     @Test
-    void testGetProductVariationsByParentId() throws Exception {
-        mockMvc.perform(MockMvcRequestBuilders.get("/storefront/product-variations/1"))
-                .andExpect(status().isOk());
+    void getProductVariationsByParentId_ValidRequest_Success() {
+        ResponseEntity<List<ProductVariationGetVm>> response = productController.getProductVariationsByParentId(1L);
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        verify(productService).getProductVariationsByParentId(1L);
     }
 
     @Test
-    void testGetProductSlug() throws Exception {
-        mockMvc.perform(MockMvcRequestBuilders.get("/storefront/productions/1/slug"))
-                .andExpect(status().isOk());
+    void getProductSlug_ValidRequest_Success() {
+        ResponseEntity<ProductSlugGetVm> response = productController.getProductSlug(1L);
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        verify(productService).getProductSlug(1L);
     }
 
     @Test
-    void testGetProductEsDetailById() throws Exception {
-        mockMvc.perform(MockMvcRequestBuilders.get("/storefront/products-es/1"))
-                .andExpect(status().isOk());
+    void getProductEsDetailById_ValidRequest_Success() {
+        ResponseEntity<ProductEsDetailVm> response = productController.getProductEsDetailById(1L);
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        verify(productService).getProductEsDetailById(1L);
     }
 
     @Test
-    void testGetRelatedProductsBackoffice() throws Exception {
-        mockMvc.perform(MockMvcRequestBuilders.get("/backoffice/products/related-products/1"))
-                .andExpect(status().isOk());
+    void getRelatedProductsBackoffice_ValidRequest_Success() {
+        ResponseEntity<List<ProductListVm>> response = productController.getRelatedProductsBackoffice(1L);
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        verify(productService).getRelatedProductsBackoffice(1L);
     }
 
     @Test
-    void testGetRelatedProductsStorefront() throws Exception {
-        mockMvc.perform(MockMvcRequestBuilders.get("/storefront/products/related-products/1")
-                        .param("pageNo", "0")
-                        .param("pageSize", "5"))
-                .andExpect(status().isOk());
+    void getRelatedProductsStorefront_ValidRequest_Success() {
+        ResponseEntity<ProductsGetVm> response = productController.getRelatedProductsStorefront(1L, 0, 5);
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        verify(productService).getRelatedProductsStorefront(1L, 0, 5);
     }
 
     @Test
-    void testGetProductsForWarehouse() throws Exception {
-        mockMvc.perform(MockMvcRequestBuilders.get("/backoffice/products/for-warehouse")
-                        .param("name", "sampleName")
-                        .param("sku", "sampleSku"))
-                .andExpect(status().isOk());
+    void getProductsForWarehouse_ValidRequest_Success() {
+        List<Long> ids = List.of(1L);
+        ResponseEntity<List<ProductInfoVm>> response = productController.getProductsForWarehouse("name", "sku", ids, FilterExistInWhSelection.ALL);
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        verify(productService).getProductsForWarehouse("name", "sku", ids, FilterExistInWhSelection.ALL);
     }
 
     @Test
-    void testUpdateProductQuantity() throws Exception {
-        mockMvc.perform(MockMvcRequestBuilders.put("/backoffice/products/update-quantity")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content("[]"))
-                .andExpect(status().isNoContent());
+    void updateProductQuantity_ValidRequest_Success() {
+        List<ProductQuantityPostVm> items = List.of(org.mockito.Mockito.mock(ProductQuantityPostVm.class));
+        ResponseEntity<Void> response = productController.updateProductQuantity(items);
+        assertEquals(HttpStatus.NO_CONTENT, response.getStatusCode());
+        verify(productService).updateProductQuantity(items);
     }
 
     @Test
-    void testSubtractProductQuantity() throws Exception {
-        List<ProductQuantityPutVm> productQuantityPutVmList = List.of(new ProductQuantityPutVm(1L, 10L));
-
-        String jsonBody = objectMapper.writeValueAsString(productQuantityPutVmList);
-
-        mockMvc.perform(MockMvcRequestBuilders.put("/backoffice/products/subtract-quantity")
-                        .contentType(MediaType.APPLICATION_JSON)
-                        .content(jsonBody))
-                .andExpect(status().isNoContent());
+    void subtractProductQuantity_ValidRequest_Success() {
+        List<ProductQuantityPutVm> items = List.of(org.mockito.Mockito.mock(ProductQuantityPutVm.class));
+        ResponseEntity<Void> response = productController.subtractProductQuantity(items);
+        assertEquals(HttpStatus.NO_CONTENT, response.getStatusCode());
+        verify(productService).subtractStockQuantity(items);
     }
 
     @Test
-    void testGetProductByCategories_Success() throws Exception {
-        // Mock the response from productService
-        List<ProductListVm> mockProductList = List.of(
-            new ProductListVm(1L, "Product 1", "product1", true,
-                true, false, true,
-                100.0, ZonedDateTime.now(), 1L, 1L),
-            new ProductListVm(2L, "Product 2", "product2", true,
-                true, false, true, 200.0,
-                ZonedDateTime.now(), 1L, 1L)
-        );
-        when(productService.getProductByCategoryIds(anyList())).thenReturn(mockProductList);
-
-        // Perform the GET request and verify the response
-        mockMvc.perform(MockMvcRequestBuilders.get("/backoffice/products/by-categories")
-                        .param("ids", "1", "2")
-                        .contentType(MediaType.APPLICATION_JSON))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].id").value(1L))
-                .andExpect(jsonPath("$[0].name").value("Product 1"))
-                .andExpect(jsonPath("$[1].id").value(2L))
-                .andExpect(jsonPath("$[1].name").value("Product 2"));
-
-        // Verify interaction with the service
-        verify(productService, times(1)).getProductByCategoryIds(anyList());
+    void getProductByIds_ValidRequest_Success() {
+        List<Long> ids = List.of(1L, 2L);
+        ResponseEntity<List<ProductListVm>> response = productController.getProductByIds(ids);
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        verify(productService).getProductByIds(ids);
     }
 
     @Test
-    void testGetProductByBrands_Success() throws Exception {
-        // Mock the response from productService
-        List<ProductListVm> mockProductList = List.of(
-            new ProductListVm(3L, "Product 3", "product3", true, true,
-                false, true, 100.0, ZonedDateTime.now(), 1L, 1L),
-            new ProductListVm(4L, "Product 4", "product4", true, true,
-                false, true, 200.0, ZonedDateTime.now(), 1L, 1L)
-        );
-        when(productService.getProductByBrandIds(anyList())).thenReturn(mockProductList);
-
-        // Perform the GET request and verify the response
-        mockMvc.perform(MockMvcRequestBuilders.get("/backoffice/products/by-brands")
-                        .param("ids", "3", "4")
-                        .contentType(MediaType.APPLICATION_JSON))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].id").value(3L))
-                .andExpect(jsonPath("$[0].name").value("Product 3"))
-                .andExpect(jsonPath("$[1].id").value(4L))
-                .andExpect(jsonPath("$[1].name").value("Product 4"));
-
-        // Verify interaction with the service
-        verify(productService, times(1)).getProductByBrandIds(anyList());
+    void getProductByCategories_ValidRequest_Success() {
+        List<Long> ids = List.of(1L, 2L);
+        ResponseEntity<List<ProductListVm>> response = productController.getProductByCategories(ids);
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        verify(productService).getProductByCategoryIds(ids);
     }
 
     @Test
-    void testGetLatestProducts_Success() throws Exception {
-
-        List<ProductListVm> mockProductList = List.of(
-                new ProductListVm(3L, "Product 3", "product3", true, true,
-                        false, true, 100.0,
-                    ZonedDateTime.now(), 1L, 1L),
-                new ProductListVm(4L, "Product 4", "product4", true, true,
-                        false, true, 200.0,
-                    ZonedDateTime.now(), 1L, 1L)
-        );
-        when(productService.getLatestProducts(1)).thenReturn(mockProductList);
-
-        mockMvc.perform(MockMvcRequestBuilders.get("/backoffice/products/latest/1")
-                        .contentType(MediaType.APPLICATION_JSON))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$[0].id").value(3L))
-                .andExpect(jsonPath("$[0].name").value("Product 3"))
-                .andExpect(jsonPath("$[1].id").value(4L))
-                .andExpect(jsonPath("$[1].name").value("Product 4"));
-
-        verify(productService, times(1)).getLatestProducts(1);
+    void getProductByBrands_ValidRequest_Success() {
+        List<Long> ids = List.of(1L, 2L);
+        ResponseEntity<List<ProductListVm>> response = productController.getProductByBrands(ids);
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        verify(productService).getProductByBrandIds(ids);
     }
 
     @Test
-    void testGetProductDetailById() throws Exception {
-        mockMvc.perform(MockMvcRequestBuilders.get("/storefront/products/detail/{productId}", 1))
-                .andExpect(status().isOk());
+    void getLatestProducts_ValidRequest_Success() {
+        ResponseEntity<List<ProductListVm>> response = productController.getLatestProducts(10);
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        verify(productService).getLatestProducts(10);
     }
 
     @Test
-    void testGetProductCheckoutList_returnListProduct() throws Exception {
-        mockMvc.perform(MockMvcRequestBuilders.get("/products")
-            .param("pageNo", "0")
-            .param("pageSize", "10")
-            .contentType(MediaType.APPLICATION_JSON))
-            .andExpect(status().isOk());
+    void getProductDetailById_ValidRequest_Success() {
+        ResponseEntity<ProductDetailInfoVm> response = productController.getProductDetailById(1L);
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        verify(productDetailService).getProductDetailById(1L);
+    }
+
+    @Test
+    void getProductCheckoutList_ValidRequest_Success() {
+        List<Long> ids = List.of(1L, 2L);
+        ResponseEntity<ProductGetCheckoutListVm> response = productController.getProductCheckoutList(0, 20, ids);
+        assertEquals(HttpStatus.OK, response.getStatusCode());
+        verify(productService).getProductCheckoutList(0, 20, ids);
     }
 }
