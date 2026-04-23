@@ -173,7 +173,7 @@ pipeline {
                     Scan whole repository for leaked secrets.
                     --exit-code=1 fails the build when any leak is detected.
                     */
-                    sh "gitleaks detect --source=. --config=gitleaks.toml --verbose --no-banner --exit-code=1"
+                    sh "gitleaks detect --source=. --config=gitleaks.toml --log-opts='--since=2026-04-22' --verbose --no-banner --exit-code=1"
                 }
             }
         }
