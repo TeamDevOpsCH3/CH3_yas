@@ -15,10 +15,15 @@ title = "Gitleaks title"
 useDefault = true
 
 [allowlist]
-description = "global allow list"
+description = "global allow list for test/demo seed configs"
 paths = [
   '''test-realm.json''',
   '''realm-export''',
   '''keycloak-yas-realm-import.yaml''',
-  '''target'''
+  '''target''',
+  '''customer/src/it/resources/application.properties''',
+  '''customer/src/main/resources/application.properties''',
+  '''k8s/deploy/cluster-config.yaml''',
+  '''k8s/charts/yas-configuration/values.yaml''',
+  '''payment/src/main/resources/db/changelog/data/changelog-0001-provider.sql'''
 ]

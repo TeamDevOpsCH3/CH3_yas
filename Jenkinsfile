@@ -9,7 +9,7 @@ template: [
         [name: 'Stage Name', command: 'your shell command here'],
     ]
 ]
-*/
+*/ 
 
 def microservices = [
     [id: 'customer',       display: 'Customer Service',       enableTest: true,  enableCoverage: true,  enableBuild: true,  commands: []],
@@ -165,6 +165,23 @@ pipeline {
     // }
 
     stages {
+        stage('Gitleaks Security Scan') {
+            steps {
+                script {
+                    echo "Running Gitleaks security scan on the entire codebase..."
+                    /*
+                    Scan whole repository for leaked secrets.
+                    --exit-code=1 fails the build when any leak is detected.
+                    */
+                    catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE', message: 'Gitleaks scan failed: potential secrets detected. Check the logs for details.') {
+                        echo "Running Gitleaks security scan on the entire codebase..."
+                        sh "gitleaks detect --source=. --config=gitleaks.toml --verbose --no-banner"
+                        echo "Gitleaks scan passed: no secrets detected."
+                    }
+                }
+            }
+        }
+
         // ---------------------------------------------------------------- //
         // Stage 1: Detect which services have changed (fast, no Maven)     //
         // ---------------------------------------------------------------- //
