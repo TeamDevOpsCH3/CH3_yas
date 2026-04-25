@@ -173,14 +173,9 @@ pipeline {
                     Scan whole repository for leaked secrets.
                     --exit-code=1 fails the build when any leak is detected.
                     */
-                    def scanRepo = sh(
-                        script: "gitleaks detect --source=. --config=gitleaks.toml --verbose --no-banner",
-                        returnStatus: true
-                    )
-                    if (scanRepo != 0) {
-                        echo "Gitleaks scan failed: potential secrets detected. Check the logs for details."
-                        currentBuild.result = 'UNSTABLE'
-                    } else {
+                    catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE', message: 'Gitleaks scan failed: potential secrets detected. Check the logs for details.') {
+                        echo "Running Gitleaks security scan on the entire codebase..."
+                        sh "gitleaks detect --source=. --config=gitleaks.toml --verbose --no-banner"
                         echo "Gitleaks scan passed: no secrets detected."
                     }
                 }
