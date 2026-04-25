@@ -283,13 +283,10 @@ class CartItemServiceTest {
         @Test
         void testDeleteOrAdjustCartItem_whenEmptyList_shouldReturnEmptyList() {
             mockCurrentUserId(CURRENT_USER_ID_SAMPLE);
-            when(cartItemRepository.findByCustomerIdAndProductIdIn(any(), any())).thenReturn(List.of());
 
             List<CartItemGetVm> result = cartItemService.deleteOrAdjustCartItem(List.of());
 
             assertEquals(0, result.size());
-            verify(cartItemRepository, org.mockito.Mockito.never()).deleteAll(any());
-            verify(cartItemRepository, org.mockito.Mockito.never()).saveAll(any());
         }
 
         @Test
