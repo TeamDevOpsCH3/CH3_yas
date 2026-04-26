@@ -176,4 +176,36 @@ class PaymentServiceTest {
         assertEquals("success", result.status());
     }
 
+    @Test
+    void initPayment_WhenHandlerThrowsException_ShouldPropagateException() {
+        InitPaymentRequestVm initPaymentRequestVm = InitPaymentRequestVm.builder()
+                .paymentMethod(PaymentMethod.PAYPAL.name()).totalPrice(BigDecimal.TEN).checkoutId("123").build();
+
+        when(paymentHandler.initPayment(initPaymentRequestVm))
+                .thenThrow(new RuntimeException("Payment provider unavailable"));
+
+        RuntimeException exception = assertThrows(
+                RuntimeException.class,
+                () -> paymentService.initPayment(initPaymentRequestVm)
+        );
+
+        assertThat(exception.getMessage()).isEqualTo("Payment provider unavailable");
+    }
+
+    @Test
+    void capturePayment_WhenHandlerThrowsException_ShouldPropagateException() {
+        CapturePaymentRequestVm capturePaymentRequestVm = CapturePaymentRequestVm.builder()
+                .paymentMethod(PaymentMethod.PAYPAL.name()).token("123").build();
+
+        when(paymentHandler.capturePayment(capturePaymentRequestVm))
+                .thenThrow(new RuntimeException("Capture failed"));
+
+        RuntimeException exception = assertThrows(
+                RuntimeException.class,
+                () -> paymentService.capturePayment(capturePaymentRequestVm)
+        );
+
+        assertThat(exception.getMessage()).isEqualTo("Capture failed");
+    }
+
 }
