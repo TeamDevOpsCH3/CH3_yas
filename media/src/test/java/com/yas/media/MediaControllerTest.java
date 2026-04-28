@@ -1,5 +1,6 @@
 package com.yas.media;
 
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.ArgumentMatchers.anyLong;
 import static org.mockito.ArgumentMatchers.anyString;
@@ -33,6 +34,7 @@ import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
+import org.springframework.web.util.NestedServletException;
 
 @ExtendWith(MockitoExtension.class)
 class MediaControllerTest {
@@ -65,8 +67,10 @@ class MediaControllerTest {
 
         when(mediaService.saveMedia(any(MediaPostVm.class))).thenReturn(savedMedia);
 
+        // Minimal valid PNG byte array
+        byte[] pngContent = new byte[]{(byte) 0x89, 'P', 'N', 'G', 0x0D, 0x0A, 0x1A, 0x0A, 0, 0, 0, 0x0D, 'I', 'H', 'D', 'R', 0, 0, 0, 1, 0, 0, 0, 1, 8, 6, 0, 0, 0, 0x1F, 0x15, (byte) 0xC4, (byte) 0x89, 0, 0, 0, 0, 'I', 'E', 'N', 'D', (byte) 0xAE, 0x42, 0x60, (byte) 0x82};
         MockMultipartFile file = new MockMultipartFile(
-            "multipartFile", "photo.png", "image/png", "fake-content".getBytes()
+            "multipartFile", "photo.png", "image/png", pngContent
         );
 
         mockMvc.perform(multipart("/medias")
@@ -97,10 +101,9 @@ class MediaControllerTest {
         doThrow(new NotFoundException("Media 99 is not found"))
             .when(mediaService).removeMedia(99L);
 
-        // NotFoundException is not handled by standaloneSetup → propagates as 500
-        // but we verify the service throws the right exception via the test passing
-        mockMvc.perform(delete("/medias/99"))
-            .andExpect(status().is5xxServerError());
+        assertThrows(NestedServletException.class, () -> {
+            mockMvc.perform(delete("/medias/99"));
+        });
     }
 
     // ------------------------------------------------------------------ //
