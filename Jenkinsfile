@@ -119,6 +119,13 @@ def runServicePipeline(service) {
 pipeline {
     agent any
 
+    options {
+        buildDiscarder(logRotator(
+            numToKeepStr: '1',
+            artifactNumToKeepStr: '1'
+        ))
+    }
+    
     tools {
         maven 'maven-3.9'
         // pom.xml requires Java 25 (maven.compiler.source=25).
