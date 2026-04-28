@@ -38,7 +38,7 @@ import org.springframework.http.MediaType;
 import org.springframework.mock.web.MockMultipartFile;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.setup.MockMvcBuilders;
-import org.springframework.web.util.NestedServletException;
+import jakarta.servlet.ServletException;
 
 @ExtendWith(MockitoExtension.class)
 class MediaControllerTest {
@@ -121,7 +121,9 @@ class MediaControllerTest {
         doThrow(new NotFoundException("Media 99 is not found"))
             .when(mediaService).removeMedia(99L);
 
-        NestedServletException ex = assertThrows(NestedServletException.class, () ->
+        // Spring Boot 3 / Spring Framework 6 removed NestedServletException.
+        // MockMvc now propagates jakarta.servlet.ServletException directly.
+        ServletException ex = assertThrows(ServletException.class, () ->
             mockMvc.perform(delete("/medias/99")).andReturn()
         );
 
