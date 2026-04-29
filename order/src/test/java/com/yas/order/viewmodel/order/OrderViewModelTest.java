@@ -10,7 +10,6 @@ import com.yas.order.model.enumeration.DeliveryStatus;
 import com.yas.order.model.enumeration.OrderStatus;
 import com.yas.order.model.enumeration.PaymentStatus;
 import java.math.BigDecimal;
-import java.time.ZonedDateTime;
 import java.util.List;
 import java.util.Set;
 import org.junit.jupiter.api.Test;
@@ -107,7 +106,6 @@ class OrderViewModelTest {
             .deliveryMethod(DeliveryMethod.GRAB_EXPRESS)
             .deliveryStatus(DeliveryStatus.PREPARING)
             .paymentStatus(PaymentStatus.PENDING)
-            .createdOn(ZonedDateTime.now())
             .build();
     }
 }

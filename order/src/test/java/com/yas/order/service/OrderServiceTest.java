@@ -44,6 +44,7 @@ import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.Pageable;
+import org.springframework.data.jpa.domain.Specification;
 
 @ExtendWith(MockitoExtension.class)
 class OrderServiceTest {
@@ -97,7 +98,7 @@ class OrderServiceTest {
 
     @Test
     void getAllOrder_whenEmptyPage_returnsEmptyListVm() {
-        when(orderRepository.findAll(any(), any(Pageable.class))).thenReturn(Page.empty());
+        when(orderRepository.findAll((Specification<Order>) any(), any(Pageable.class))).thenReturn(Page.empty());
 
         var result = orderService.getAllOrder(
             org.springframework.data.util.Pair.of(ZonedDateTime.now().minusDays(1), ZonedDateTime.now()),
@@ -137,7 +138,7 @@ class OrderServiceTest {
     void isOrderCompletedWithUserIdAndProductId_whenNoVariations_returnsFalse() {
         setSubjectUpSecurityContext("user-1");
         when(productService.getProductVariations(1L)).thenReturn(List.of());
-        when(orderRepository.findOne(any())).thenReturn(Optional.empty());
+        when(orderRepository.findOne((Specification<Order>) any())).thenReturn(Optional.empty());
 
         OrderExistsByProductAndUserGetVm result = orderService.isOrderCompletedWithUserIdAndProductId(1L);
 
@@ -149,7 +150,7 @@ class OrderServiceTest {
         setSubjectUpSecurityContext("user-1");
         when(productService.getProductVariations(2L))
             .thenReturn(List.of(new ProductVariationVm(21L, "v1", "sku1")));
-        when(orderRepository.findOne(any())).thenReturn(Optional.of(buildOrder(20L)));
+        when(orderRepository.findOne((Specification<Order>) any())).thenReturn(Optional.of(buildOrder(20L)));
 
         OrderExistsByProductAndUserGetVm result = orderService.isOrderCompletedWithUserIdAndProductId(2L);
 
@@ -224,7 +225,7 @@ class OrderServiceTest {
 
     @Test
     void exportCsv_whenOrderListNull_returnsCsvBytes() throws IOException {
-        when(orderRepository.findAll(any(), any(Pageable.class))).thenReturn(Page.empty());
+        when(orderRepository.findAll((Specification<Order>) any(), any(Pageable.class))).thenReturn(Page.empty());
 
         OrderRequest request = OrderRequest.builder()
             .createdFrom(ZonedDateTime.now().minusDays(1))
@@ -242,7 +243,7 @@ class OrderServiceTest {
     void exportCsv_whenOrderListPresent_returnsCsvBytes() throws IOException {
         Order order = buildOrder(50L);
         Page<Order> page = new PageImpl<>(List.of(order));
-        when(orderRepository.findAll(any(), any(Pageable.class))).thenReturn(page);
+        when(orderRepository.findAll((Specification<Order>) any(), any(Pageable.class))).thenReturn(page);
         when(orderMapper.toCsv(any())).thenReturn(OrderItemCsv.builder().build());
 
         OrderRequest request = OrderRequest.builder()
