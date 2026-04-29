@@ -54,6 +54,11 @@ def runServicePipeline(service) {
     def enableBuild    = service.enableBuild    ?: false
     def commands       = service.commands       ?: []
 
+    if (params.ONLY_RATING_TEST) {
+        enableCoverage = false
+        enableBuild = false
+    }
+
     // ------------------------------------------------------------------ //
     // Stage Test: mvn test (unit tests only) + publish JUnit XML          //
     // ------------------------------------------------------------------ //
@@ -154,6 +159,11 @@ pipeline {
 
     parameters {
         booleanParam(
+            name        : 'ONLY_RATING_TEST',
+            defaultValue: true,
+            description : 'Run only Rating Service test stage (skip coverage/build and other services)'
+        )
+        booleanParam(
             name        : 'FORCE_RUN_ALL',
             defaultValue: false,
             description : 'Force run Test + Coverage for ALL services regardless of which files changed'
@@ -203,6 +213,12 @@ pipeline {
         stage('Detect Changes') {
             steps {
                 script {
+                    if (params.ONLY_RATING_TEST) {
+                        env.SERVICES_TO_RUN = 'Rating Service'
+                        echo 'ONLY_RATING_TEST enabled: running Rating Service tests only.'
+                        return
+                    }
+
                     def changedPaths = collectChangedPaths()
                     def pomChanged   = changedPaths.contains('pom.xml')
                     def noScmContext = changedPaths.isEmpty()
