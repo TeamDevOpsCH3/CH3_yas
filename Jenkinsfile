@@ -72,7 +72,7 @@ def runServicePipeline(service) {
     // ------------------------------------------------------------------ //
     if (enableCoverage) {
         stage("${serviceDisplay} - Coverage Report") {
-            sh "mvn jacoco:report -pl ${serviceId} -am -DskipTests -B --no-transfer-progress"
+            sh "mvn jacoco:report -pl ${serviceId} -DskipTests -B --no-transfer-progress"
         }
         publishHTML(target: [
             allowMissing         : true,
@@ -96,30 +96,21 @@ def runServicePipeline(service) {
     // ------------------------------------------------------------------ //
     // Stage SonarCloud Scan                                               //
     // ------------------------------------------------------------------ //
-    stage("${serviceDisplay} - SonarCloud Scan") {
-        dir("${env.WORKSPACE}") {
-            sh """
-                set -e
-
-                if [ -x "./mvnw" ]; then
-                MVN_CMD="./mvnw"
-                elif [ -f "./mvnw" ]; then
-                chmod +x ./mvnw
-                MVN_CMD="./mvnw"
-                else
-                MVN_CMD="mvn"
-                fi
-
-                \$MVN_CMD clean verify sonar:sonar \\
-                -pl ${serviceId} -am \\
-                -DskipTests -DskipITs \\
-                -Dsonar.projectKey=TeamDevOpsCH3_CH3_yas \\
-                -Dsonar.organization=teamdevopsch3 \\
-                -Dsonar.host.url=https://sonarcloud.io \\
-                -Dsonar.login=\$SONAR_TOKEN
-            """
-        }
-    }
+    // stage("${serviceDisplay} - SonarCloud Scan") {
+    //     withCredentials([string(credentialsId: 'SONAR_TOKEN', variable: 'SONAR_TOKEN')]) {
+    //         sh """
+    //             mvn sonar:sonar \
+    //             -pl ${serviceId} \
+    //             -DskipTests \
+    //             -Dsonar.projectKey=TeamDevOpsCH3_CH3_yas_${serviceId} \
+    //             -Dsonar.organization=teamdevopsch3 \
+    //             -Dsonar.host.url=https://sonarcloud.io \
+    //             -Dsonar.login=\$SONAR_TOKEN \
+    //             -Dsonar.coverage.jacoco.xmlReportPaths=${serviceId}/target/site/jacoco/jacoco.xml \
+    //             -B --no-transfer-progress
+    //         """
+    //     }
+    // }
 
     if (enableBuild) {
         stage("${serviceDisplay} - Build") {
@@ -266,10 +257,21 @@ pipeline {
         // ---------------------------------------------------------------- //
         stage('Snyk Security Scan') {
             when {
-                expression { params.ENABLE_SNYK_SCAN == true }
+                allOf {
+                    expression { params.ENABLE_SNYK_SCAN == true }
+                    anyOf {
+                        // Lần đầu / manual force
+                        expression { params.FORCE_RUN_ALL == true }
+                        // Chỉ chạy lại khi có pom.xml thay đổi
+                        expression {
+                            def changedPaths = collectChangedPaths()
+                            changedPaths.isEmpty() ||   // no SCM context = first run
+                            changedPaths.any { it == 'pom.xml' || it.endsWith('/pom.xml') }
+                        }
+                    }
+                }
             }
             steps {
-                echo 'Running Snyk scan for entire project...'
                 snykSecurity(
                     snykInstallation: 'snyk-cli',
                     snykTokenId     : 'snyk-token',
@@ -278,6 +280,33 @@ pipeline {
                     severity        : params.SNYK_SEVERITY,
                     failOnIssues    : params.SNYK_FAIL_ON_ISSUES
                 )
+            }
+        }
+
+        stage('SonarCloud Scan') {
+            steps {
+                script {
+                    // Gom tất cả jacoco.xml của các service đã chạy
+                    def servicesToRun = env.SERVICES_TO_RUN
+                        ? env.SERVICES_TO_RUN.split(',').toList()
+                        : []
+
+                    def jacocoPaths = microservices
+                        .findAll { svc -> servicesToRun.contains(svc.display) && svc.enableCoverage }
+                        .collect { svc -> "${svc.id}/target/site/jacoco/jacoco.xml" }
+                        .join(',')
+
+                    sh """
+                        mvn sonar:sonar \
+                        -Dsonar.projectKey=teamdevopsch3_CH3_yas4 \
+                        -Dsonar.organization=teamdevopsch3 \
+                        -Dsonar.host.url=https://sonarcloud.io \
+                        -Dsonar.login=\${SONAR_TOKEN} \
+                        -Dsonar.coverage.jacoco.xmlReportPaths=${jacocoPaths} \
+                        -DskipTests \
+                        -B --no-transfer-progress
+                    """
+                }
             }
         }
     }
