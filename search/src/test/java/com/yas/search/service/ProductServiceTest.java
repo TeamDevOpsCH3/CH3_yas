@@ -162,6 +162,67 @@ class ProductServiceTest {
         verify(elasticsearchOperations).search(any(NativeQuery.class), eq(Product.class));
     }
 
+    @Test
+    void testFindProductAdvance_whenFiltersBlankAndNoRange_thenNoFailure() {
+        SearchHits<Product> searchHits = getSearchHits();
+
+        when(elasticsearchOperations.search(any(NativeQuery.class), eq(Product.class))).thenReturn(searchHits);
+
+        ProductCriteriaDto criteriaDto = new ProductCriteriaDto(
+            "",
+            0,
+            10,
+            " ",
+            null,
+            "",
+            null,
+            null,
+            SortType.DEFAULT
+        );
+
+        ProductListGetVm result = productService.findProductAdvance(criteriaDto);
+
+        assertNotNull(result);
+        assertEquals(1, result.products().size());
+    }
+
+    @Test
+    void testFindProductAdvance_whenMinOrMaxProvided_thenNoFailure() {
+        SearchHits<Product> searchHits = getSearchHits();
+
+        when(elasticsearchOperations.search(any(NativeQuery.class), eq(Product.class))).thenReturn(searchHits);
+
+        ProductCriteriaDto minOnly = new ProductCriteriaDto(
+            "keyword",
+            0,
+            10,
+            "brand",
+            "category",
+            "attribute",
+            5.0,
+            null,
+            SortType.PRICE_ASC
+        );
+
+        ProductCriteriaDto maxOnly = new ProductCriteriaDto(
+            "keyword",
+            0,
+            10,
+            "brand",
+            "category",
+            "attribute",
+            null,
+            15.0,
+            SortType.PRICE_DESC
+        );
+
+        ProductListGetVm minResult = productService.findProductAdvance(minOnly);
+        ProductListGetVm maxResult = productService.findProductAdvance(maxOnly);
+
+        assertNotNull(minResult);
+        assertNotNull(maxResult);
+    }
+
     private static SearchHits<Product> getSearchHits() {
 
         Product product = Product.builder()
