@@ -386,7 +386,7 @@ class PaypalServiceTest {
         List<LinkDescription> linkDescriptions = new ArrayList<>();
         LinkDescription linkDescription = new LinkDescription();
         linkDescription.rel("approve");
-        linkDescription.href("http://redirect.url/paypal");
+        linkDescription.href("http://redirect.url/paypal?paymentMethod=CREDIT_CARD");
         linkDescriptions.add(linkDescription);
 
         Order order = new Order()
@@ -476,8 +476,8 @@ class PaypalServiceTest {
         PaypalCapturePaymentResponse result = paypalService.capturePayment(paypalCapturePaymentRequest);
 
         assertNotNull(result);
-        assertEquals(BigDecimal.ZERO, result.amount());
-        assertEquals(BigDecimal.ZERO, result.paymentFee());
+        assertEquals(0, BigDecimal.ZERO.compareTo(result.amount()));
+        assertEquals(0, BigDecimal.ZERO.compareTo(result.paymentFee()));
     }
 
     @Test
