@@ -290,27 +290,19 @@ pipeline {
                         ? env.SERVICES_TO_RUN.split(',').toList()
                         : []
 
-                    // Gom tất cả jacoco.xml paths
-                    def jacocoPaths = microservices
-                        .findAll { svc -> servicesToRun.contains(svc.display) && svc.enableCoverage }
-                        .collect { svc -> "${svc.id}/target/site/jacoco/jacoco.xml" }
-                        .join(',')
-
-                    // Gom tất cả binary dirs để Sonar phân tích bytecode
-                    def binaryDirs = microservices
-                        .findAll { svc -> servicesToRun.contains(svc.display) && svc.enableBuild }
-                        .collect { svc -> "${svc.id}/target/classes" }
-                        .join(',')
+                    if (servicesToRun.isEmpty()) {
+                        echo 'No services to scan. Skipping.'
+                        return
+                    }
 
                     sh """
-                        mvn sonar:sonar \
+                        mvn verify sonar:sonar \
                         -DskipTests \
+                        -DskipITs \
                         -Dsonar.projectKey=teamdevopsch3_CH3_yas4 \
                         -Dsonar.organization=teamdevopsch3 \
                         -Dsonar.host.url=https://sonarcloud.io \
                         -Dsonar.login=\${SONAR_TOKEN} \
-                        -Dsonar.coverage.jacoco.xmlReportPaths=${jacocoPaths} \
-                        -Dsonar.java.binaries=${binaryDirs} \
                         -B --no-transfer-progress
                     """
                 }
