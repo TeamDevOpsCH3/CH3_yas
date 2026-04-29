@@ -16,7 +16,7 @@ def microservices = [
     [id: 'customer',       display: 'Customer Service',       enableTest: false, enableCoverage: false, enableBuild: false, commands: []],
     [id: 'cart',           display: 'Cart Service',           enableTest: false, enableCoverage: false, enableBuild: false, commands: []],
     [id: 'backoffice-bff', display: 'Backoffice BFF Service', enableTest: false, enableCoverage: false, enableBuild: false, commands: []], 
-    [id: 'inventory',      display: 'Inventory Service',      enableTest: false, enableCoverage: false, enableBuild: false, commands: []],
+    [id: 'inventory',      display: 'Inventory Service',      enableTest: true,  enableCoverage: true,  enableBuild: true,  commands: []],
     [id: 'location',       display: 'Location Service',       enableTest: false, enableCoverage: false, enableBuild: false, commands: []],
     [id: 'media',          display: 'Media Service',          enableTest: false, enableCoverage: false, enableBuild: false, commands: []],
     [id: 'order',          display: 'Order Service',          enableTest: false, enableCoverage: false, enableBuild: false, commands: []],
