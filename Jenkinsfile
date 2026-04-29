@@ -59,7 +59,7 @@ def runServicePipeline(service) {
     // ------------------------------------------------------------------ //
     if (enableTest) {
         stage("${serviceDisplay} - Test") {
-            sh "mvn test -pl ${serviceId} -am -DskipITs -Dtest='!ProductCdcConsumerTest,!*IT' -B --no-transfer-progress"
+            sh "mvn test -pl ${serviceId} -am -DskipITs -Dexcludes='**/it/**' -Dtest='!ProductCdcConsumerTest,!*IT' -B --no-transfer-progress"
         }
         junit(
             testResults: "${serviceId}/target/surefire-reports/*.xml",
