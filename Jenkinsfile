@@ -72,7 +72,7 @@ def runServicePipeline(service) {
     // ------------------------------------------------------------------ //
     if (enableCoverage) {
         stage("${serviceDisplay} - Coverage Report") {
-            sh "mvn jacoco:report -pl ${serviceId} -am -DskipTests -B --no-transfer-progress"
+            sh "mvn jacoco:report -pl ${serviceId} -DskipTests -B --no-transfer-progress"
         }
         publishHTML(target: [
             allowMissing         : true,
@@ -101,6 +101,25 @@ def runServicePipeline(service) {
         )
     }
 
+    // ------------------------------------------------------------------ //
+    // Stage SonarCloud Scan                                               //
+    // ------------------------------------------------------------------ //
+    // stage("${serviceDisplay} - SonarCloud Scan") {
+    //     withCredentials([string(credentialsId: 'SONAR_TOKEN', variable: 'SONAR_TOKEN')]) {
+    //         sh """
+    //             mvn sonar:sonar \
+    //             -pl ${serviceId} \
+    //             -DskipTests \
+    //             -Dsonar.projectKey=TeamDevOpsCH3_CH3_yas_${serviceId} \
+    //             -Dsonar.organization=teamdevopsch3 \
+    //             -Dsonar.host.url=https://sonarcloud.io \
+    //             -Dsonar.login=\$SONAR_TOKEN \
+    //             -Dsonar.coverage.jacoco.xmlReportPaths=${serviceId}/target/site/jacoco/jacoco.xml \
+    //             -B --no-transfer-progress
+    //         """
+    //     }
+    // }
+
     if (enableBuild) {
         stage("${serviceDisplay} - Build") {
             sh "mvn package -pl ${serviceId} -am -DskipTests -B --no-transfer-progress"
@@ -111,7 +130,7 @@ def runServicePipeline(service) {
             allowEmptyArchive: true
         )
     }
-    
+
     // Extra ad-hoc stages defined per-service
     commands.each { cmd ->
         stage("${serviceDisplay} - ${cmd.name}") {
@@ -150,6 +169,8 @@ pipeline {
         // Running 14 services in parallel with -Xmx1024m each = ~14GB RAM → OOM.
         // Sequential execution + 512m is safe on most CI servers.
         MAVEN_OPTS = '-Xmx512m'
+
+        SONAR_TOKEN = credentials('SONAR_TOKEN')
     }
 
     parameters {
@@ -205,15 +226,19 @@ pipeline {
                 script {
                     def changedPaths = collectChangedPaths()
                     def pomChanged   = changedPaths.contains('pom.xml')
+                    def pipelineChanged = changedPaths.contains('Jenkinsfile')
                     def noScmContext = changedPaths.isEmpty()
 
                     echo "Changed paths: ${changedPaths}"
+                    echo "pom.xml changed: ${pomChanged}"
+                    echo "Jenkinsfile changed: ${pipelineChanged}"
+                    echo "No SCM context: ${noScmContext}"
 
                     // Build list of services that need to run
                     env.SERVICES_TO_RUN = microservices
                         .findAll { service ->
                             def serviceChanged = changedPaths.any { it.startsWith(service.id + '/') }
-                            params.FORCE_RUN_ALL || noScmContext || pomChanged || serviceChanged
+                            params.FORCE_RUN_ALL || noScmContext || pomChanged || pipelineChanged || serviceChanged
                         }
                         .collect { it.display }
                         .join(',')
@@ -243,9 +268,9 @@ pipeline {
                     microservices.each { service ->
                         if (!servicesToRun.contains(service.display)) return
 
-                        echo "========================================"
+                        echo '========================================'
                         echo "Running pipeline for: ${service.display}"
-                        echo "========================================"
+                        echo '========================================'
 
                         // Wrap each service in a timeout to prevent one stuck
                         // Maven process from hanging the entire build forever
@@ -264,10 +289,21 @@ pipeline {
         // ---------------------------------------------------------------- //
         stage('Snyk Security Scan') {
             when {
-                expression { params.ENABLE_SNYK_SCAN == true }
+                allOf {
+                    expression { params.ENABLE_SNYK_SCAN == true }
+                    anyOf {
+                        // Lần đầu / manual force
+                        expression { params.FORCE_RUN_ALL == true }
+                        // Chỉ chạy lại khi có pom.xml thay đổi
+                        expression {
+                            def changedPaths = collectChangedPaths()
+                            changedPaths.isEmpty() ||   // no SCM context = first run
+                            changedPaths.any { it == 'pom.xml' || it.endsWith('/pom.xml') }
+                        }
+                    }
+                }
             }
             steps {
-                echo "Running Snyk scan for entire project..."
                 snykSecurity(
                     snykInstallation: 'snyk-cli',
                     snykTokenId     : 'snyk-token',
@@ -276,6 +312,32 @@ pipeline {
                     severity        : params.SNYK_SEVERITY,
                     failOnIssues    : params.SNYK_FAIL_ON_ISSUES
                 )
+            }
+        }
+
+        stage('SonarCloud Scan') {
+            steps {
+                script {
+                    def servicesToRun = env.SERVICES_TO_RUN
+                        ? env.SERVICES_TO_RUN.split(',').toList()
+                        : []
+
+                    if (servicesToRun.isEmpty()) {
+                        echo 'No services to scan. Skipping.'
+                        return
+                    }
+
+                    sh """
+                        mvn verify sonar:sonar \
+                        -DskipTests \
+                        -DskipITs \
+                        -Dsonar.projectKey=teamdevopsch3_CH3_yas4 \
+                        -Dsonar.organization=teamdevopsch3 \
+                        -Dsonar.host.url=https://sonarcloud.io \
+                        -Dsonar.login=\${SONAR_TOKEN} \
+                        -B --no-transfer-progress
+                    """
+                }
             }
         }
     }
