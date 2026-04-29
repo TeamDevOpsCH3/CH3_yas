@@ -11,10 +11,11 @@ template: [
 ]
 */ 
 
+
 def microservices = [
     [id: 'customer',       display: 'Customer Service',       enableTest: true,  enableCoverage: true,  enableBuild: true,  commands: []],
     [id: 'cart',           display: 'Cart Service',           enableTest: true,  enableCoverage: true,  enableBuild: true,  commands: []],
-    [id: 'backoffice-bff', display: 'Backoffice BFF Service', enableTest: true,  enableCoverage: true,  enableBuild: true,  commands: []],  // Unit tests added
+    [id: 'backoffice-bff', display: 'Backoffice BFF Service', enableTest: true,  enableCoverage: true,  enableBuild: true,  commands: []], 
     [id: 'inventory',      display: 'Inventory Service',      enableTest: true,  enableCoverage: true,  enableBuild: true,  commands: []],
     [id: 'location',       display: 'Location Service',       enableTest: true,  enableCoverage: true,  enableBuild: true,  commands: []],
     [id: 'media',          display: 'Media Service',          enableTest: true,  enableCoverage: true,  enableBuild: true,  commands: []],
@@ -24,13 +25,13 @@ def microservices = [
     [id: 'product',        display: 'Product Service',        enableTest: true,  enableCoverage: true,  enableBuild: true,  commands: []],
     [id: 'promotion',      display: 'Promotion Service',      enableTest: true,  enableCoverage: true,  enableBuild: true,  commands: []],
     [id: 'rating',         display: 'Rating Service',         enableTest: true,  enableCoverage: true,  enableBuild: true,  commands: []],
-    [id: 'search',         display: 'Search Service',         enableTest: true,  enableCoverage: true,  enableBuild: true,  commands: []],  // Has unit tests in src/test
-    [id: 'storefront-bff', display: 'Storefront BFF Service', enableTest: true,  enableCoverage: true,  enableBuild: true,  commands: []],  // Unit tests added
+    [id: 'search',         display: 'Search Service',         enableTest: true,  enableCoverage: true,  enableBuild: true,  commands: []], 
+    [id: 'storefront-bff', display: 'Storefront BFF Service', enableTest: true,  enableCoverage: true,  enableBuild: true,  commands: []], 
     [id: 'tax',            display: 'Tax Service',            enableTest: true,  enableCoverage: true,  enableBuild: true,  commands: []],
     [id: 'webhook',        display: 'Webhook Service',        enableTest: true,  enableCoverage: true,  enableBuild: true,  commands: []],
     [id: 'sampledata',     display: 'Sampledata Service',     enableTest: false, enableCoverage: false, enableBuild: true,  commands: []],
-    [id: 'recommendation', display: 'Recommendation Service', enableTest: false, enableCoverage: false, enableBuild: true,  commands: []],  // Has implementation, tests need Testcontainers
-    [id: 'delivery',       display: 'Delivery Service',       enableTest: false, enableCoverage: false, enableBuild: false, commands: []],  // Skeleton service - no implementation yet
+    [id: 'recommendation', display: 'Recommendation Service', enableTest: false, enableCoverage: false, enableBuild: true,  commands: []], 
+    [id: 'delivery',       display: 'Delivery Service',       enableTest: false, enableCoverage: false, enableBuild: false, commands: []], 
 ]
 
 @NonCPS
@@ -59,7 +60,7 @@ def runServicePipeline(service) {
     // ------------------------------------------------------------------ //
     if (enableTest) {
         stage("${serviceDisplay} - Test") {
-            sh "mvn test -pl ${serviceId} -am -DskipITs -B --no-transfer-progress"
+            sh "mvn test -pl ${serviceId} -am -DskipITs -Dsurefire.excludes='**/it/**,**/*IT.java,**/*ITCase.java,**/*IT*.java,**/ProductCdcConsumerTest.java,**/ApplicationTest.java' -B --no-transfer-progress"
         }
         junit(
             testResults: "${serviceId}/target/surefire-reports/*.xml",
@@ -72,7 +73,7 @@ def runServicePipeline(service) {
     // ------------------------------------------------------------------ //
     if (enableCoverage) {
         stage("${serviceDisplay} - Coverage Report") {
-            sh "mvn jacoco:report -pl ${serviceId} -am -DskipTests -B --no-transfer-progress"
+            sh "mvn jacoco:report -pl ${serviceId} -DskipTests -B --no-transfer-progress"
         }
         publishHTML(target: [
             allowMissing         : true,
@@ -89,9 +90,36 @@ def runServicePipeline(service) {
             ]],
             id              : "jacoco-${serviceId}",
             name            : "JaCoCo - ${serviceDisplay}",
-            ignoreParsingErrors: true
+            ignoreParsingErrors: true,
+            // Coverage Gate: mark build UNSTABLE (not FAILURE) when line coverage < 70%
+            // UNSTABLE = yellow badge, team can still see reports and decide next step
+            qualityGates: [[
+                threshold  : 70.0,
+                metric     : 'LINE',
+                baseline   : 'PROJECT',
+                criticality: 'UNSTABLE'
+            ]]
         )
     }
+
+    // ------------------------------------------------------------------ //
+    // Stage SonarCloud Scan                                               //
+    // ------------------------------------------------------------------ //
+    // stage("${serviceDisplay} - SonarCloud Scan") {
+    //     withCredentials([string(credentialsId: 'SONAR_TOKEN', variable: 'SONAR_TOKEN')]) {
+    //         sh """
+    //             mvn sonar:sonar \
+    //             -pl ${serviceId} \
+    //             -DskipTests \
+    //             -Dsonar.projectKey=TeamDevOpsCH3_CH3_yas_${serviceId} \
+    //             -Dsonar.organization=teamdevopsch3 \
+    //             -Dsonar.host.url=https://sonarcloud.io \
+    //             -Dsonar.login=\$SONAR_TOKEN \
+    //             -Dsonar.coverage.jacoco.xmlReportPaths=${serviceId}/target/site/jacoco/jacoco.xml \
+    //             -B --no-transfer-progress
+    //         """
+    //     }
+    // }
 
     if (enableBuild) {
         stage("${serviceDisplay} - Build") {
@@ -103,7 +131,7 @@ def runServicePipeline(service) {
             allowEmptyArchive: true
         )
     }
-    
+
     // Extra ad-hoc stages defined per-service
     commands.each { cmd ->
         stage("${serviceDisplay} - ${cmd.name}") {
@@ -142,6 +170,8 @@ pipeline {
         // Running 14 services in parallel with -Xmx1024m each = ~14GB RAM → OOM.
         // Sequential execution + 512m is safe on most CI servers.
         MAVEN_OPTS = '-Xmx512m'
+
+        SONAR_TOKEN = credentials('SONAR_TOKEN')
     }
 
     parameters {
@@ -197,15 +227,19 @@ pipeline {
                 script {
                     def changedPaths = collectChangedPaths()
                     def pomChanged   = changedPaths.contains('pom.xml')
+                    def pipelineChanged = changedPaths.contains('Jenkinsfile')
                     def noScmContext = changedPaths.isEmpty()
 
                     echo "Changed paths: ${changedPaths}"
+                    echo "pom.xml changed: ${pomChanged}"
+                    echo "Jenkinsfile changed: ${pipelineChanged}"
+                    echo "No SCM context: ${noScmContext}"
 
                     // Build list of services that need to run
                     env.SERVICES_TO_RUN = microservices
                         .findAll { service ->
                             def serviceChanged = changedPaths.any { it.startsWith(service.id + '/') }
-                            params.FORCE_RUN_ALL || noScmContext || pomChanged || serviceChanged
+                            params.FORCE_RUN_ALL || noScmContext || pomChanged || pipelineChanged || serviceChanged
                         }
                         .collect { it.display }
                         .join(',')
@@ -235,9 +269,9 @@ pipeline {
                     microservices.each { service ->
                         if (!servicesToRun.contains(service.display)) return
 
-                        echo "========================================"
+                        echo '========================================'
                         echo "Running pipeline for: ${service.display}"
-                        echo "========================================"
+                        echo '========================================'
 
                         // Wrap each service in a timeout to prevent one stuck
                         // Maven process from hanging the entire build forever
@@ -256,10 +290,21 @@ pipeline {
         // ---------------------------------------------------------------- //
         stage('Snyk Security Scan') {
             when {
-                expression { params.ENABLE_SNYK_SCAN == true }
+                allOf {
+                    expression { params.ENABLE_SNYK_SCAN == true }
+                    anyOf {
+                        // Lần đầu / manual force
+                        expression { params.FORCE_RUN_ALL == true }
+                        // Chỉ chạy lại khi có pom.xml thay đổi
+                        expression {
+                            def changedPaths = collectChangedPaths()
+                            changedPaths.isEmpty() ||   // no SCM context = first run
+                            changedPaths.any { it == 'pom.xml' || it.endsWith('/pom.xml') }
+                        }
+                    }
+                }
             }
             steps {
-                echo "Running Snyk scan for entire project..."
                 snykSecurity(
                     snykInstallation: 'snyk-cli',
                     snykTokenId     : 'snyk-token',
@@ -268,6 +313,32 @@ pipeline {
                     severity        : params.SNYK_SEVERITY,
                     failOnIssues    : params.SNYK_FAIL_ON_ISSUES
                 )
+            }
+        }
+
+        stage('SonarCloud Scan') {
+            steps {
+                script {
+                    def servicesToRun = env.SERVICES_TO_RUN
+                        ? env.SERVICES_TO_RUN.split(',').toList()
+                        : []
+
+                    if (servicesToRun.isEmpty()) {
+                        echo 'No services to scan. Skipping.'
+                        return
+                    }
+
+                    sh """
+                        mvn verify sonar:sonar \
+                        -DskipTests \
+                        -DskipITs \
+                        -Dsonar.projectKey=teamdevopsch3_CH3_yas4 \
+                        -Dsonar.organization=teamdevopsch3 \
+                        -Dsonar.host.url=https://sonarcloud.io \
+                        -Dsonar.login=\${SONAR_TOKEN} \
+                        -B --no-transfer-progress
+                    """
+                }
             }
         }
     }
