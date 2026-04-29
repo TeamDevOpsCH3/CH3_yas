@@ -41,7 +41,13 @@ class SecurityConfigTest {
 
         Map<String, Object> realmAccess = Map.of("roles", List.of("ADMIN"));
         OidcUserInfo userInfo = new OidcUserInfo(Map.of("realm_access", realmAccess));
-        OidcIdToken idToken = new OidcIdToken("token", Instant.now(), Instant.now().plusSeconds(60), Map.of());
+        Instant now = Instant.now();
+        OidcIdToken idToken = new OidcIdToken(
+            "token",
+            now,
+            now.plusSeconds(60),
+            Map.of("sub", "user-id", "groups", List.of("role_admin"))
+        );
         OidcUserAuthority authority = new OidcUserAuthority(idToken, userInfo);
 
         Collection<? extends GrantedAuthority> result = mapper.mapAuthorities(List.of(authority));
