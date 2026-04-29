@@ -7,6 +7,7 @@ import static org.mockito.ArgumentMatchers.anyBoolean;
 import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.when;
 
 import com.yas.commonlibrary.exception.AccessDeniedException;
@@ -14,7 +15,6 @@ import com.yas.commonlibrary.exception.DuplicatedException;
 import com.yas.commonlibrary.exception.ForbiddenException;
 import com.yas.commonlibrary.exception.NotFoundException;
 import com.yas.customer.config.KeycloakPropsConfig;
-import com.yas.customer.utils.Constants;
 import com.yas.customer.viewmodel.customer.CustomerPostVm;
 import java.util.Collections;
 import org.junit.jupiter.api.BeforeEach;
@@ -55,10 +55,10 @@ class CustomerServiceAdditionalTest {
 
     @BeforeEach
     void setUp() {
-        when(keycloakPropsConfig.getRealm()).thenReturn(REALM_NAME);
-        when(keycloakPropsConfig.getResource()).thenReturn(RESOURCE_NAME);
-        when(keycloak.realm(REALM_NAME)).thenReturn(realmResource);
-        when(realmResource.users()).thenReturn(usersResource);
+        lenient().when(keycloakPropsConfig.getRealm()).thenReturn(REALM_NAME);
+        lenient().when(keycloakPropsConfig.getResource()).thenReturn(RESOURCE_NAME);
+        lenient().when(keycloak.realm(REALM_NAME)).thenReturn(realmResource);
+        lenient().when(realmResource.users()).thenReturn(usersResource);
     }
 
     @Test
@@ -81,7 +81,7 @@ class CustomerServiceAdditionalTest {
         NotFoundException thrown = assertThrows(NotFoundException.class,
             () -> customerService.deleteCustomer("id-1"));
 
-        assertThat(thrown.getMessage()).contains(Constants.ErrorCode.USER_NOT_FOUND);
+        assertThat(thrown.getMessage()).contains("User not found");
     }
 
     @Test

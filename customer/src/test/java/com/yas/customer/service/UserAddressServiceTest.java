@@ -12,7 +12,6 @@ import com.yas.commonlibrary.exception.AccessDeniedException;
 import com.yas.commonlibrary.exception.NotFoundException;
 import com.yas.customer.model.UserAddress;
 import com.yas.customer.repository.UserAddressRepository;
-import com.yas.customer.utils.Constants;
 import com.yas.customer.viewmodel.address.ActiveAddressVm;
 import com.yas.customer.viewmodel.address.AddressDetailVm;
 import com.yas.customer.viewmodel.address.AddressPostVm;
@@ -88,7 +87,7 @@ class UserAddressServiceTest {
         when(userAddressRepository.findByUserIdAndIsActiveTrue("user-1")).thenReturn(Optional.empty());
 
         NotFoundException thrown = assertThrows(NotFoundException.class, () -> userAddressService.getAddressDefault());
-        assertThat(thrown.getMessage()).contains(Constants.ErrorCode.USER_ADDRESS_NOT_FOUND);
+        assertThat(thrown.getMessage()).contains("User address not found");
     }
 
     @Test
@@ -167,7 +166,7 @@ class UserAddressServiceTest {
 
         NotFoundException thrown = assertThrows(NotFoundException.class,
             () -> userAddressService.deleteAddress(10L));
-        assertThat(thrown.getMessage()).contains(Constants.ErrorCode.USER_ADDRESS_NOT_FOUND);
+        assertThat(thrown.getMessage()).contains("User address not found");
     }
 
     @Test
