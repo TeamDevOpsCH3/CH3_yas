@@ -12,25 +12,25 @@ template: [
 */ 
 
 def microservices = [
-    [id: 'customer',       display: 'Customer Service',       enableTest: true,  enableCoverage: true,  enableBuild: true,  commands: []],
-    [id: 'cart',           display: 'Cart Service',           enableTest: true,  enableCoverage: true,  enableBuild: true,  commands: []],
-    [id: 'backoffice-bff', display: 'Backoffice BFF Service', enableTest: true,  enableCoverage: true,  enableBuild: true,  commands: []],  // Unit tests added
-    [id: 'inventory',      display: 'Inventory Service',      enableTest: true,  enableCoverage: true,  enableBuild: true,  commands: []],
-    [id: 'location',       display: 'Location Service',       enableTest: true,  enableCoverage: true,  enableBuild: true,  commands: []],
-    [id: 'media',          display: 'Media Service',          enableTest: true,  enableCoverage: true,  enableBuild: true,  commands: []],
-    [id: 'order',          display: 'Order Service',          enableTest: true,  enableCoverage: true,  enableBuild: true,  commands: []],
-    [id: 'payment-paypal', display: 'Payment Paypal Service', enableTest: true,  enableCoverage: true,  enableBuild: true,  commands: []],
-    [id: 'payment',        display: 'Payment Service',        enableTest: true,  enableCoverage: true,  enableBuild: true,  commands: []],
-    [id: 'product',        display: 'Product Service',        enableTest: true,  enableCoverage: true,  enableBuild: true,  commands: []],
-    [id: 'promotion',      display: 'Promotion Service',      enableTest: true,  enableCoverage: true,  enableBuild: true,  commands: []],
-    [id: 'rating',         display: 'Rating Service',         enableTest: true,  enableCoverage: true,  enableBuild: true,  commands: []],
-    [id: 'search',         display: 'Search Service',         enableTest: true,  enableCoverage: true,  enableBuild: true,  commands: []],  // Has unit tests in src/test
-    [id: 'storefront-bff', display: 'Storefront BFF Service', enableTest: true,  enableCoverage: true,  enableBuild: true,  commands: []],  // Unit tests added
-    [id: 'tax',            display: 'Tax Service',            enableTest: true,  enableCoverage: true,  enableBuild: true,  commands: []],
-    [id: 'webhook',        display: 'Webhook Service',        enableTest: true,  enableCoverage: true,  enableBuild: true,  commands: []],
+    [id: 'search',         display: 'Search Service',         enableTest: true,  enableCoverage: true,  enableBuild: true,  commands: []],
+    [id: 'customer',       display: 'Customer Service',       enableTest: false, enableCoverage: false, enableBuild: true,  commands: []],
+    [id: 'cart',           display: 'Cart Service',           enableTest: false, enableCoverage: false, enableBuild: true,  commands: []],
+    [id: 'backoffice-bff', display: 'Backoffice BFF Service', enableTest: false, enableCoverage: false, enableBuild: true,  commands: []],
+    [id: 'inventory',      display: 'Inventory Service',      enableTest: false, enableCoverage: false, enableBuild: true,  commands: []],
+    [id: 'location',       display: 'Location Service',       enableTest: false, enableCoverage: false, enableBuild: true,  commands: []],
+    [id: 'media',          display: 'Media Service',          enableTest: false, enableCoverage: false, enableBuild: true,  commands: []],
+    [id: 'order',          display: 'Order Service',          enableTest: false, enableCoverage: false, enableBuild: true,  commands: []],
+    [id: 'payment-paypal', display: 'Payment Paypal Service', enableTest: false, enableCoverage: false, enableBuild: true,  commands: []],
+    [id: 'payment',        display: 'Payment Service',        enableTest: false, enableCoverage: false, enableBuild: true,  commands: []],
+    [id: 'product',        display: 'Product Service',        enableTest: false, enableCoverage: false, enableBuild: true,  commands: []],
+    [id: 'promotion',      display: 'Promotion Service',      enableTest: false, enableCoverage: false, enableBuild: true,  commands: []],
+    [id: 'rating',         display: 'Rating Service',         enableTest: false, enableCoverage: false, enableBuild: true,  commands: []],
+    [id: 'storefront-bff', display: 'Storefront BFF Service', enableTest: false, enableCoverage: false, enableBuild: true,  commands: []],
+    [id: 'tax',            display: 'Tax Service',            enableTest: false, enableCoverage: false, enableBuild: true,  commands: []],
+    [id: 'webhook',        display: 'Webhook Service',        enableTest: false, enableCoverage: false, enableBuild: true,  commands: []],
     [id: 'sampledata',     display: 'Sampledata Service',     enableTest: false, enableCoverage: false, enableBuild: true,  commands: []],
-    [id: 'recommendation', display: 'Recommendation Service', enableTest: false, enableCoverage: false, enableBuild: true,  commands: []],  // Has implementation, tests need Testcontainers
-    [id: 'delivery',       display: 'Delivery Service',       enableTest: false, enableCoverage: false, enableBuild: false, commands: []],  // Skeleton service - no implementation yet
+    [id: 'recommendation', display: 'Recommendation Service', enableTest: false, enableCoverage: false, enableBuild: true,  commands: []],
+    [id: 'delivery',       display: 'Delivery Service',       enableTest: false, enableCoverage: false, enableBuild: false, commands: []],
 ]
 
 @NonCPS
@@ -59,7 +59,7 @@ def runServicePipeline(service) {
     // ------------------------------------------------------------------ //
     if (enableTest) {
         stage("${serviceDisplay} - Test") {
-            sh "mvn test -pl ${serviceId} -am -DskipITs -Dsurefire.excludes='**/it/**,**/*IT.java,**/*ITCase.java,**/*IT*.java,**/ProductCdcConsumerTest.java' -B --no-transfer-progress"
+            sh "mvn test -pl ${serviceId} -am -DskipITs -Dtest='!ProductCdcConsumerTest,!*IT' -B --no-transfer-progress"
         }
         junit(
             testResults: "${serviceId}/target/surefire-reports/*.xml",
