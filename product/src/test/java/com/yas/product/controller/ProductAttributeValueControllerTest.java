@@ -132,4 +132,65 @@ class ProductAttributeValueControllerTest {
         mockMvc.perform(delete("/backoffice/product-attribute-value/{id}", id))
                 .andExpect(status().isNoContent());
     }
+
+    @Test
+    void testDeleteProductAttributeValueById_NotFound() throws Exception {
+        Long id = 1L;
+
+        when(productAttributeValueRepository.findById(id)).thenReturn(Optional.empty());
+
+        mockMvc.perform(delete("/backoffice/product-attribute-value/{id}", id))
+                .andExpect(status().isNotFound());
+    }
+
+    @Test
+    void testCreateProductAttributeValue_productAttributeIdIsNull() throws Exception {
+        ProductAttributeValuePostVm productAttributeValuePostVm
+                = new ProductAttributeValuePostVm(1L, null, "Red");
+
+        Product product = new Product();
+        product.setId(1L);
+        product.setName("Product name");
+
+        ProductAttribute productAttribute = new ProductAttribute();
+        productAttribute.setName("Color");
+
+        ProductAttributeValue productAttributeValue = new ProductAttributeValue();
+        productAttributeValue.setId(1L);
+        productAttributeValue.setValue("Red");
+        productAttributeValue.setProduct(product);
+        productAttributeValue.setProductAttribute(productAttribute);
+
+        when(productRepository.findById(ArgumentMatchers.anyLong()))
+                .thenReturn(Optional.of(new Product()));
+        when(productAttributeValueRepository.save(any(ProductAttributeValue.class))).thenReturn(productAttributeValue);
+
+        mockMvc.perform(post("/backoffice/product-attribute-value")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(new ObjectMapper().writeValueAsString(productAttributeValuePostVm)))
+                .andExpect(status().isCreated());
+    }
+
+    @Test
+    void testCreateProductAttributeValue_productIdIsNull() throws Exception {
+        ProductAttributeValuePostVm productAttributeValuePostVm
+                = new ProductAttributeValuePostVm(null, 1L, "Red");
+
+        ProductAttribute productAttribute = new ProductAttribute();
+        productAttribute.setId(1L);
+        productAttribute.setName("Color");
+
+        ProductAttributeValue productAttributeValue = new ProductAttributeValue();
+        productAttributeValue.setId(1L);
+        productAttributeValue.setValue("Red");
+        productAttributeValue.setProductAttribute(productAttribute);
+
+        when(productAttributeRepository.findById(anyLong())).thenReturn(Optional.of(new ProductAttribute()));
+        when(productAttributeValueRepository.save(any(ProductAttributeValue.class))).thenReturn(productAttributeValue);
+
+        mockMvc.perform(post("/backoffice/product-attribute-value")
+                        .contentType(MediaType.APPLICATION_JSON)
+                        .content(new ObjectMapper().writeValueAsString(productAttributeValuePostVm)))
+                .andExpect(status().isCreated());
+    }
 }
