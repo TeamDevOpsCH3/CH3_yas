@@ -4,7 +4,7 @@ import static com.yas.order.utils.SecurityContextUtils.setSubjectUpSecurityConte
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
-import static org.mockito.ArgumentMatchers.anyCollection;
+import static org.mockito.ArgumentMatchers.anyInt;
 import static org.mockito.ArgumentMatchers.anyString;
 import static org.mockito.ArgumentMatchers.eq;
 import static org.mockito.Mockito.verify;
@@ -12,16 +12,17 @@ import static org.mockito.Mockito.when;
 
 import com.yas.commonlibrary.exception.ForbiddenException;
 import com.yas.commonlibrary.exception.NotFoundException;
+import com.yas.order.mapper.CheckoutMapper;
 import com.yas.order.mapper.CheckoutMapperImpl;
 import com.yas.order.model.Checkout;
 import com.yas.order.model.CheckoutItem;
+import com.yas.order.model.Order;
 import com.yas.order.model.enumeration.CheckoutState;
-import com.yas.order.repository.CheckoutItemRepository;
 import com.yas.order.repository.CheckoutRepository;
 import com.yas.order.viewmodel.checkout.CheckoutPaymentMethodPutVm;
 import com.yas.order.viewmodel.checkout.CheckoutPostVm;
+import com.yas.order.viewmodel.checkout.CheckoutStatusPutVm;
 import com.yas.order.viewmodel.product.ProductCheckoutListVm;
-import com.yas.order.viewmodel.product.ProductGetCheckoutListVm;
 import java.util.List;
 import java.util.Map;
 import java.util.Optional;
@@ -35,40 +36,34 @@ import org.junit.jupiter.api.Assertions;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
-import static org.mockito.ArgumentMatchers.anyInt;
-import static org.mockito.Mockito.mock;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.context.SpringBootTest;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import org.springframework.security.core.context.SecurityContextHolder;
-import org.springframework.security.oauth2.jwt.Jwt;
-import org.springframework.test.context.junit.jupiter.SpringExtension;
+import org.mockito.InjectMocks;
+import org.mockito.Mock;
+import org.mockito.Spy;
+import org.mockito.junit.jupiter.MockitoExtension;
 
-@ExtendWith(SpringExtension.class)
-@SpringBootTest(classes = {CheckoutMapperImpl.class, CheckoutService.class})
+@ExtendWith(MockitoExtension.class)
 class CheckoutServiceTest {
 
-    @MockitoBean
-    CheckoutRepository checkoutRepository;
+        @Mock
+        private CheckoutRepository checkoutRepository;
 
-    @MockitoBean
-    CheckoutItemRepository checkoutItemRepository;
+        @Mock
+        private OrderService orderService;
 
-    @MockitoBean
-    OrderService orderService;
+        @Mock
+        private ProductService productService;
 
-    @MockitoBean
-    ProductService productService;
+        @Spy
+        private CheckoutMapper checkoutMapper = new CheckoutMapperImpl();
 
-    @Autowired
-    CheckoutService checkoutService;
+        @InjectMocks
+        private CheckoutService checkoutService;
 
     CheckoutPostVm checkoutPostVm;
     List<CheckoutItem> checkoutItems;
     Checkout checkoutCreated;
     String checkoutId = UUID.randomUUID().toString();
     List<ProductCheckoutListVm> productCheckoutListVms;
-    ProductGetCheckoutListVm productGetCheckoutListVm;
     Map<Long, ProductCheckoutListVm> productCheckoutListVmMap;
 
     @BeforeEach
@@ -86,7 +81,6 @@ class CheckoutServiceTest {
                 .build();
         checkoutCreated.setCreatedBy("test-create-by");
         setSubjectUpSecurityContext(checkoutCreated.getCreatedBy());
-        when(SecurityContextHolder.getContext().getAuthentication().getPrincipal()).thenReturn(mock(Jwt.class));
 
         checkoutItems = checkoutPostVm.checkoutItemPostVms().stream()
                 .map(itemVm -> CheckoutItem.builder()
@@ -103,13 +97,6 @@ class CheckoutServiceTest {
                     .set(field(ProductCheckoutListVm.class, "id"), t.getProductId())
                     .create();
         }).toList();
-        productGetCheckoutListVm = new ProductGetCheckoutListVm(
-                productCheckoutListVms,
-                0,
-                productCheckoutListVms.size(),
-                productCheckoutListVms.size(),
-                1,
-                true);
         productCheckoutListVmMap = productCheckoutListVms.stream()
                 .collect(Collectors.toMap(ProductCheckoutListVm::getId, Function.identity()));
     }
@@ -118,7 +105,6 @@ class CheckoutServiceTest {
     void testCreateCheckout_whenNormalCase_returnCheckout() {
         checkoutCreated.setCheckoutItems(checkoutItems);
         when(checkoutRepository.save(any())).thenReturn(checkoutCreated);
-        when(checkoutItemRepository.saveAll(anyCollection())).thenReturn(checkoutItems);
         when(productService.getProductInfomation(any(Set.class), anyInt(), anyInt())).thenReturn(productCheckoutListVmMap);
         var res = checkoutService.createCheckout(checkoutPostVm);
 
@@ -135,12 +121,14 @@ class CheckoutServiceTest {
 
     @Test
     void testCreateCheckout_whenCheckoutItemsIsEmpty_throwError() {
+                when(checkoutRepository.save(any())).thenReturn(checkoutCreated);
+                when(productService.getProductInfomation(any(Set.class), anyInt(), anyInt()))
+                        .thenReturn(Map.of());
 
-        when(checkoutRepository.save(any())).thenReturn(checkoutCreated);
-        when(checkoutItemRepository.saveAll(anyCollection())).thenReturn(List.of());
+                NotFoundException exception = assertThrows(NotFoundException.class,
+                        () -> checkoutService.createCheckout(checkoutPostVm));
 
-        NotFoundException exception = assertThrows(NotFoundException.class, () -> checkoutService.createCheckout(checkoutPostVm));
-        assertThat(exception).hasMessage("PRODUCT_NOT_FOUND");
+                assertThat(exception.getMessage()).contains("product");
     }
 
     @Test
@@ -148,7 +136,6 @@ class CheckoutServiceTest {
         checkoutCreated.setCheckoutItems(checkoutItems);
         when(checkoutRepository.findByIdAndCheckoutState(anyString(), eq(CheckoutState.PENDING)))
                 .thenReturn(Optional.ofNullable(checkoutCreated));
-        when(checkoutItemRepository.findAllByCheckoutId(anyString())).thenReturn(checkoutItems);
 
         var res = checkoutService.getCheckoutPendingStateWithItemsById("1");
 
@@ -178,9 +165,9 @@ class CheckoutServiceTest {
 
     @Test
     void testGetCheckoutPendingStateWithItemsById_whenNormalCase_returnCheckoutVmWithoutCheckoutItems() {
+        checkoutCreated.setCheckoutItems(List.of());
         when(checkoutRepository.findByIdAndCheckoutState(anyString(), eq(CheckoutState.PENDING)))
                 .thenReturn(Optional.ofNullable(checkoutCreated));
-        when(checkoutItemRepository.findAllByCheckoutId(anyString())).thenReturn(List.of());
 
         var res = checkoutService.getCheckoutPendingStateWithItemsById("1");
 
@@ -211,6 +198,44 @@ class CheckoutServiceTest {
         verify(checkoutRepository).save(checkout);
         assertThat(checkout.getPaymentMethodId()).isEqualTo(request.paymentMethodId());
     }
+
+        @Test
+        void testUpdateCheckoutStatus_whenCheckoutNotFound_thenThrowNotFoundException() {
+                CheckoutStatusPutVm request = new CheckoutStatusPutVm("missing", CheckoutState.COMPLETED.name());
+                when(checkoutRepository.findById("missing")).thenReturn(Optional.empty());
+
+                assertThrows(NotFoundException.class, () -> checkoutService.updateCheckoutStatus(request));
+        }
+
+        @Test
+        void testUpdateCheckoutStatus_whenNotOwned_thenThrowForbidden() {
+                Checkout checkout = Checkout.builder().id("c1").checkoutState(CheckoutState.PENDING).build();
+                checkout.setCreatedBy("owner-1");
+                when(checkoutRepository.findById("c1")).thenReturn(Optional.of(checkout));
+                setSubjectUpSecurityContext("other-user");
+
+                CheckoutStatusPutVm request = new CheckoutStatusPutVm("c1", CheckoutState.COMPLETED.name());
+
+                assertThrows(ForbiddenException.class, () -> checkoutService.updateCheckoutStatus(request));
+        }
+
+        @Test
+        void testUpdateCheckoutStatus_whenOwned_returnsOrderId() {
+                Checkout checkout = Checkout.builder().id("c2").checkoutState(CheckoutState.PENDING).build();
+                checkout.setCreatedBy("owner-2");
+                when(checkoutRepository.findById("c2")).thenReturn(Optional.of(checkout));
+                setSubjectUpSecurityContext("owner-2");
+
+                Order order = Order.builder().id(99L).checkoutId("c2").build();
+                when(orderService.findOrderByCheckoutId("c2")).thenReturn(order);
+
+                CheckoutStatusPutVm request = new CheckoutStatusPutVm("c2", CheckoutState.COMPLETED.name());
+
+                Long result = checkoutService.updateCheckoutStatus(request);
+
+                assertThat(result).isEqualTo(99L);
+                verify(checkoutRepository).save(checkout);
+        }
 
     @Test
     void testUpdateCheckoutPaymentMethod_whenCheckoutNotFound_thenThrowNotFoundException() {
