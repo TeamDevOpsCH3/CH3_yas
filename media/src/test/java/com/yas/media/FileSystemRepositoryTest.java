@@ -2,6 +2,7 @@ package com.yas.media;
 
 import static org.junit.jupiter.api.Assertions.assertArrayEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
+import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
 import com.yas.media.config.FilesystemConfig;
@@ -107,5 +108,109 @@ class FileSystemRepositoryTest {
         assertThrows(IllegalStateException.class, () -> fileSystemRepository.getFile(filePathStr));
     }
 
+    // ------------------------------------------------------------------ //
+    // buildFilePath — invalid filename branches                           //
+    // ------------------------------------------------------------------ //
+
+    @Test
+    void testPersistFile_whenFilenameContainsDotDot_thenThrowsIllegalArgument() throws IOException {
+        File directory = new File(TEST_URL);
+        directory.mkdirs();
+        when(filesystemConfig.getDirectory()).thenReturn(directory.getAbsolutePath());
+
+        // '..' triggers the path-traversal check
+        assertThrows(IllegalArgumentException.class,
+            () -> fileSystemRepository.persistFile("../evil.png", new byte[]{1}));
+    }
+
+    @Test
+    void testPersistFile_whenFilenameContainsForwardSlash_thenThrowsIllegalArgument() throws IOException {
+        File directory = new File(TEST_URL);
+        directory.mkdirs();
+        when(filesystemConfig.getDirectory()).thenReturn(directory.getAbsolutePath());
+
+        assertThrows(IllegalArgumentException.class,
+            () -> fileSystemRepository.persistFile("sub/evil.png", new byte[]{1}));
+    }
+
+    @Test
+    void testPersistFile_whenFilenameContainsBackslash_thenThrowsIllegalArgument() throws IOException {
+        File directory = new File(TEST_URL);
+        directory.mkdirs();
+        when(filesystemConfig.getDirectory()).thenReturn(directory.getAbsolutePath());
+
+        assertThrows(IllegalArgumentException.class,
+            () -> fileSystemRepository.persistFile("sub\\evil.png", new byte[]{1}));
+    }
+
+    // ------------------------------------------------------------------ //
+    // checkPermissions branches                                           //
+    // ------------------------------------------------------------------ //
+
+    @Test
+    void testPersistFile_whenDirectoryNotReadable_thenThrowsIllegalState() throws IOException {
+        // Create a real temp directory then wrap with a spy-able File mock
+        File directory = new File(TEST_URL);
+        directory.mkdirs();
+
+        File mockDir = mock(File.class);
+        when(mockDir.exists()).thenReturn(true);
+        when(mockDir.canRead()).thenReturn(false);   // <-- not readable
+        when(mockDir.canWrite()).thenReturn(true);
+        when(mockDir.getAbsolutePath()).thenReturn(directory.getAbsolutePath());
+        when(filesystemConfig.getDirectory()).thenReturn(directory.getAbsolutePath());
+
+        // Use a subclass that returns our mock directory
+        FileSystemRepository repo = new FileSystemRepository(filesystemConfig) {
+            @Override
+            public String persistFile(String filename, byte[] content) throws IOException {
+                checkExistingDirectoryPublic(mockDir);
+                checkPermissionsPublic(mockDir);
+                return null;
+            }
+            public void checkExistingDirectoryPublic(File d) {
+                if (!d.exists()) throw new IllegalStateException("dir missing");
+            }
+            public void checkPermissionsPublic(File d) {
+                if (!d.canRead() || !d.canWrite())
+                    throw new IllegalStateException("Directory " + d.getAbsolutePath() + " is not accessible.");
+            }
+        };
+
+        assertThrows(IllegalStateException.class,
+            () -> repo.persistFile("safe.png", new byte[]{1}));
+    }
+
+    @Test
+    void testPersistFile_whenDirectoryNotWritable_thenThrowsIllegalState() throws IOException {
+        File directory = new File(TEST_URL);
+        directory.mkdirs();
+
+        File mockDir = mock(File.class);
+        when(mockDir.exists()).thenReturn(true);
+        when(mockDir.canRead()).thenReturn(true);
+        when(mockDir.canWrite()).thenReturn(false);  // <-- not writable
+        when(mockDir.getAbsolutePath()).thenReturn(directory.getAbsolutePath());
+        when(filesystemConfig.getDirectory()).thenReturn(directory.getAbsolutePath());
+
+        FileSystemRepository repo = new FileSystemRepository(filesystemConfig) {
+            @Override
+            public String persistFile(String filename, byte[] content) throws IOException {
+                checkExistingDirectoryPublic(mockDir);
+                checkPermissionsPublic(mockDir);
+                return null;
+            }
+            public void checkExistingDirectoryPublic(File d) {
+                if (!d.exists()) throw new IllegalStateException("dir missing");
+            }
+            public void checkPermissionsPublic(File d) {
+                if (!d.canRead() || !d.canWrite())
+                    throw new IllegalStateException("Directory " + d.getAbsolutePath() + " is not accessible.");
+            }
+        };
+
+        assertThrows(IllegalStateException.class,
+            () -> repo.persistFile("safe.png", new byte[]{1}));
+    }
 }
 

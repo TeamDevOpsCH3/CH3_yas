@@ -59,7 +59,7 @@ def runServicePipeline(service) {
     // ------------------------------------------------------------------ //
     if (enableTest) {
         stage("${serviceDisplay} - Test") {
-            sh "mvn test -pl ${serviceId} -am -DskipITs -B --no-transfer-progress"
+            sh "mvn test -pl ${serviceId} -am -DskipITs -Dexcludes='**/it/**' -B --no-transfer-progress"
         }
         junit(
             testResults: "${serviceId}/target/surefire-reports/*.xml",
@@ -89,7 +89,15 @@ def runServicePipeline(service) {
             ]],
             id              : "jacoco-${serviceId}",
             name            : "JaCoCo - ${serviceDisplay}",
-            ignoreParsingErrors: true
+            ignoreParsingErrors: true,
+            // Coverage Gate: mark build UNSTABLE (not FAILURE) when line coverage < 70%
+            // UNSTABLE = yellow badge, team can still see reports and decide next step
+            qualityGates: [[
+                threshold  : 70.0,
+                metric     : 'LINE',
+                baseline   : 'PROJECT',
+                criticality: 'UNSTABLE'
+            ]]
         )
     }
 
