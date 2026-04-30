@@ -10,6 +10,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.junit.jupiter.MockitoExtension;
 import org.springframework.http.ResponseEntity;
+import org.springframework.http.HttpStatus;
 import org.springframework.security.oauth2.core.user.OAuth2User;
 
 @ExtendWith(MockitoExtension.class)
@@ -27,5 +28,15 @@ class AuthenticationControllerTest {
         assertNotNull(response);
         assertNotNull(response.getBody());
         assertEquals("admin", response.getBody().username());
+    }
+
+    @Test
+    void user_whenPrincipalPresent_returnsOkStatus() {
+        OAuth2User principal = mock(OAuth2User.class);
+        when(principal.getAttribute("preferred_username")).thenReturn("staff");
+
+        ResponseEntity<AuthenticatedUser> response = controller.user(principal);
+
+        assertEquals(HttpStatus.OK, response.getStatusCode());
     }
 }
