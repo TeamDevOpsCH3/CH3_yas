@@ -67,6 +67,6 @@ class StockHistoryServiceTest {
 
         var result = stockHistoryService.getStockHistories(10L, 1L);
 
-        assertEquals(1, result.stockHistoryList().size());
+        assertEquals(1, result.data().size());
     }
 }
