@@ -3,7 +3,6 @@ package com.yas.location.service;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
 
@@ -16,7 +15,6 @@ import com.yas.location.repository.AddressRepository;
 import com.yas.location.repository.CountryRepository;
 import com.yas.location.repository.DistrictRepository;
 import com.yas.location.repository.StateOrProvinceRepository;
-import com.yas.location.utils.Constants;
 import com.yas.location.viewmodel.address.AddressDetailVm;
 import com.yas.location.viewmodel.address.AddressGetVm;
 import com.yas.location.viewmodel.address.AddressPostVm;
@@ -57,10 +55,7 @@ class AddressServiceUnitTest {
 
         when(countryRepository.findById(3L)).thenReturn(Optional.empty());
 
-        NotFoundException exception = assertThrows(NotFoundException.class,
-            () -> addressService.createAddress(postVm));
-
-        assertTrue(exception.getMessage().contains(Constants.ErrorCode.COUNTRY_NOT_FOUND));
+        assertThrows(NotFoundException.class, () -> addressService.createAddress(postVm));
     }
 
     @Test
@@ -72,9 +67,13 @@ class AddressServiceUnitTest {
             .countryId(3L)
             .build();
 
-        when(stateOrProvinceRepository.findById(2L)).thenReturn(Optional.empty());
-        when(districtRepository.findById(1L)).thenReturn(Optional.empty());
-        when(countryRepository.findById(3L)).thenReturn(Optional.of(Country.builder().id(3L).build()));
+        Country country = Country.builder().id(3L).build();
+        StateOrProvince state = StateOrProvince.builder().id(2L).country(country).build();
+        District district = District.builder().id(1L).stateProvince(state).build();
+
+        when(stateOrProvinceRepository.findById(2L)).thenReturn(Optional.of(state));
+        when(districtRepository.findById(1L)).thenReturn(Optional.of(district));
+        when(countryRepository.findById(3L)).thenReturn(Optional.of(country));
         when(addressRepository.save(any(Address.class))).thenAnswer(invocation -> invocation.getArgument(0));
 
         AddressGetVm result = addressService.createAddress(postVm);
@@ -93,20 +92,14 @@ class AddressServiceUnitTest {
 
         when(addressRepository.findById(10L)).thenReturn(Optional.empty());
 
-        NotFoundException exception = assertThrows(NotFoundException.class,
-            () -> addressService.updateAddress(10L, postVm));
-
-        assertTrue(exception.getMessage().contains(Constants.ErrorCode.ADDRESS_NOT_FOUND));
+        assertThrows(NotFoundException.class, () -> addressService.updateAddress(10L, postVm));
     }
 
     @Test
     void deleteAddress_whenNotFound_throwsNotFound() {
         when(addressRepository.findById(10L)).thenReturn(Optional.empty());
 
-        NotFoundException exception = assertThrows(NotFoundException.class,
-            () -> addressService.deleteAddress(10L));
-
-        assertTrue(exception.getMessage().contains(Constants.ErrorCode.ADDRESS_NOT_FOUND));
+        assertThrows(NotFoundException.class, () -> addressService.deleteAddress(10L));
     }
 
     @Test

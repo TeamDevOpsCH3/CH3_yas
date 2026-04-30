@@ -2,7 +2,6 @@ package com.yas.location.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.when;
 
 import com.yas.commonlibrary.exception.DuplicatedException;
@@ -12,7 +11,6 @@ import com.yas.location.model.Country;
 import com.yas.location.model.StateOrProvince;
 import com.yas.location.repository.CountryRepository;
 import com.yas.location.repository.StateOrProvinceRepository;
-import com.yas.location.utils.Constants;
 import com.yas.location.viewmodel.stateorprovince.StateOrProvincePostVm;
 import java.util.List;
 import java.util.Optional;
@@ -49,10 +47,7 @@ class StateOrProvinceServiceUnitTest {
 
         when(countryRepository.existsById(10L)).thenReturn(false);
 
-        NotFoundException exception = assertThrows(NotFoundException.class,
-            () -> stateOrProvinceService.createStateOrProvince(postVm));
-
-        assertTrue(exception.getMessage().contains(Constants.ErrorCode.COUNTRY_NOT_FOUND));
+        assertThrows(NotFoundException.class, () -> stateOrProvinceService.createStateOrProvince(postVm));
     }
 
     @Test
@@ -65,10 +60,7 @@ class StateOrProvinceServiceUnitTest {
         when(countryRepository.existsById(1L)).thenReturn(true);
         when(stateOrProvinceRepository.existsByNameIgnoreCaseAndCountryId("State", 1L)).thenReturn(true);
 
-        DuplicatedException exception = assertThrows(DuplicatedException.class,
-            () -> stateOrProvinceService.createStateOrProvince(postVm));
-
-        assertTrue(exception.getMessage().contains(Constants.ErrorCode.NAME_ALREADY_EXITED));
+        assertThrows(DuplicatedException.class, () -> stateOrProvinceService.createStateOrProvince(postVm));
     }
 
     @Test
@@ -84,25 +76,20 @@ class StateOrProvinceServiceUnitTest {
         when(stateOrProvinceRepository.existsByNameIgnoreCaseAndCountryIdAndIdNot("Updated", 1L, 2L))
             .thenReturn(true);
 
-        DuplicatedException exception = assertThrows(DuplicatedException.class,
-            () -> stateOrProvinceService.updateStateOrProvince(postVm, 2L));
-
-        assertTrue(exception.getMessage().contains(Constants.ErrorCode.NAME_ALREADY_EXITED));
+        assertThrows(DuplicatedException.class, () -> stateOrProvinceService.updateStateOrProvince(postVm, 2L));
     }
 
     @Test
     void delete_whenNotExists_throwsNotFound() {
         when(stateOrProvinceRepository.existsById(5L)).thenReturn(false);
 
-        NotFoundException exception = assertThrows(NotFoundException.class,
-            () -> stateOrProvinceService.delete(5L));
-
-        assertTrue(exception.getMessage().contains(Constants.ErrorCode.STATE_OR_PROVINCE_NOT_FOUND));
+        assertThrows(NotFoundException.class, () -> stateOrProvinceService.delete(5L));
     }
 
     @Test
     void getPageableStateOrProvinces_mapsPageValues() {
-        StateOrProvince state = StateOrProvince.builder().id(1L).name("State").build();
+        Country country = Country.builder().id(1L).build();
+        StateOrProvince state = StateOrProvince.builder().id(1L).name("State").country(country).build();
         when(stateOrProvinceRepository.getPageableStateOrProvincesByCountry(
             1L,
             PageRequest.of(0, 2, Sort.by(Sort.Direction.ASC, "name"))

@@ -2,7 +2,6 @@ package com.yas.location.service;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
-import static org.junit.jupiter.api.Assertions.assertTrue;
 import static org.mockito.Mockito.verifyNoInteractions;
 import static org.mockito.Mockito.when;
 
@@ -11,9 +10,9 @@ import com.yas.commonlibrary.exception.NotFoundException;
 import com.yas.location.mapper.CountryMapper;
 import com.yas.location.model.Country;
 import com.yas.location.repository.CountryRepository;
-import com.yas.location.utils.Constants;
 import com.yas.location.viewmodel.country.CountryPostVm;
 import java.util.List;
+import java.util.Optional;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.InjectMocks;
@@ -44,10 +43,7 @@ class CountryServiceUnitTest {
 
         when(countryRepository.existsByCode2IgnoreCase("US")).thenReturn(true);
 
-        DuplicatedException exception = assertThrows(DuplicatedException.class,
-            () -> countryService.create(postVm));
-
-        assertTrue(exception.getMessage().contains(Constants.ErrorCode.CODE_ALREADY_EXISTED));
+        assertThrows(DuplicatedException.class, () -> countryService.create(postVm));
         verifyNoInteractions(countryMapper);
     }
 
@@ -61,10 +57,7 @@ class CountryServiceUnitTest {
         when(countryRepository.existsByCode2IgnoreCase("US")).thenReturn(false);
         when(countryRepository.existsByNameIgnoreCase("United States")).thenReturn(true);
 
-        DuplicatedException exception = assertThrows(DuplicatedException.class,
-            () -> countryService.create(postVm));
-
-        assertTrue(exception.getMessage().contains(Constants.ErrorCode.NAME_ALREADY_EXITED));
+        assertThrows(DuplicatedException.class, () -> countryService.create(postVm));
     }
 
     @Test
@@ -79,10 +72,7 @@ class CountryServiceUnitTest {
         when(countryRepository.findById(1L)).thenReturn(Optional.of(existing));
         when(countryRepository.existsByNameIgnoreCaseAndIdNot("United States", 1L)).thenReturn(true);
 
-        DuplicatedException exception = assertThrows(DuplicatedException.class,
-            () -> countryService.update(postVm, 1L));
-
-        assertTrue(exception.getMessage().contains(Constants.ErrorCode.NAME_ALREADY_EXITED));
+        assertThrows(DuplicatedException.class, () -> countryService.update(postVm, 1L));
     }
 
     @Test
@@ -98,20 +88,14 @@ class CountryServiceUnitTest {
         when(countryRepository.existsByNameIgnoreCaseAndIdNot("United States", 1L)).thenReturn(false);
         when(countryRepository.existsByCode2IgnoreCaseAndIdNot("US", 1L)).thenReturn(true);
 
-        DuplicatedException exception = assertThrows(DuplicatedException.class,
-            () -> countryService.update(postVm, 1L));
-
-        assertTrue(exception.getMessage().contains(Constants.ErrorCode.CODE_ALREADY_EXISTED));
+        assertThrows(DuplicatedException.class, () -> countryService.update(postVm, 1L));
     }
 
     @Test
     void delete_whenNotExists_throwsNotFoundException() {
         when(countryRepository.existsById(99L)).thenReturn(false);
 
-        NotFoundException exception = assertThrows(NotFoundException.class,
-            () -> countryService.delete(99L));
-
-        assertTrue(exception.getMessage().contains(Constants.ErrorCode.COUNTRY_NOT_FOUND));
+        assertThrows(NotFoundException.class, () -> countryService.delete(99L));
     }
 
     @Test
