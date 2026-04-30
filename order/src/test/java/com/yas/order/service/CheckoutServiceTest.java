@@ -121,7 +121,6 @@ class CheckoutServiceTest {
 
     @Test
     void testCreateCheckout_whenCheckoutItemsIsEmpty_throwError() {
-                when(checkoutRepository.save(any())).thenReturn(checkoutCreated);
                 when(productService.getProductInfomation(any(Set.class), anyInt(), anyInt()))
                         .thenReturn(Map.of());
 

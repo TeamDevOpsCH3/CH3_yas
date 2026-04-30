@@ -33,6 +33,8 @@ import com.yas.order.viewmodel.product.ProductVariationVm;
 import java.io.IOException;
 import java.math.BigDecimal;
 import java.time.ZonedDateTime;
+import java.util.ArrayList;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.Test;
@@ -79,7 +81,10 @@ class OrderServiceTest {
 
         when(orderRepository.save(any(Order.class))).thenReturn(savedOrder);
         when(orderRepository.findById(10L)).thenReturn(Optional.of(savedOrder));
-        when(orderItemRepository.saveAll(any())).thenAnswer(invocation -> invocation.getArgument(0));
+        when(orderItemRepository.saveAll(any())).thenAnswer(invocation -> {
+            Collection<OrderItem> items = invocation.getArgument(0);
+            return new ArrayList<>(items);
+        });
         doNothing().when(productService).subtractProductStockQuantity(any(OrderVm.class));
         doNothing().when(cartService).deleteCartItems(any(OrderVm.class));
         doNothing().when(promotionService).updateUsagePromotion(any());
@@ -104,7 +109,7 @@ class OrderServiceTest {
             org.springframework.data.util.Pair.of(ZonedDateTime.now().minusDays(1), ZonedDateTime.now()),
             null,
             List.of(),
-            org.springframework.data.util.Pair.of(null, null),
+            org.springframework.data.util.Pair.of("", ""),
             null,
             org.springframework.data.util.Pair.of(0, 10)
         );
@@ -230,6 +235,8 @@ class OrderServiceTest {
         OrderRequest request = OrderRequest.builder()
             .createdFrom(ZonedDateTime.now().minusDays(1))
             .createdTo(ZonedDateTime.now())
+            .billingCountry("")
+            .billingPhoneNumber("")
             .pageNo(0)
             .pageSize(10)
             .build();
@@ -249,6 +256,8 @@ class OrderServiceTest {
         OrderRequest request = OrderRequest.builder()
             .createdFrom(ZonedDateTime.now().minusDays(1))
             .createdTo(ZonedDateTime.now())
+            .billingCountry("")
+            .billingPhoneNumber("")
             .pageNo(0)
             .pageSize(10)
             .build();
