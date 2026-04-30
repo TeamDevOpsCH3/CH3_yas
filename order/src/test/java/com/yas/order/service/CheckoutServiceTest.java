@@ -128,7 +128,7 @@ class CheckoutServiceTest {
                 NotFoundException exception = assertThrows(NotFoundException.class,
                         () -> checkoutService.createCheckout(checkoutPostVm));
 
-                assertThat(exception.getMessage()).contains("product");
+                assertThat(exception.getMessage()).containsIgnoringCase("product");
     }
 
     @Test

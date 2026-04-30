@@ -83,7 +83,7 @@ class ProductServiceTest {
         when(requestHeadersUriSpec.headers(any())).thenReturn(requestHeadersUriSpec);
         when(requestHeadersUriSpec.retrieve()).thenReturn(responseSpec);
         when(responseSpec.toEntity(new ParameterizedTypeReference<ProductGetCheckoutListVm>() {}))
-            .thenReturn(null);
+            .thenReturn(ResponseEntity.ok(null));
 
         assertThrows(NotFoundException.class,
             () -> productService.getProductInfomation(Set.of(1L), 0, 1));

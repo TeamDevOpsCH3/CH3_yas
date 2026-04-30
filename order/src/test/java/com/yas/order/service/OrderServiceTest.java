@@ -5,6 +5,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 import static org.junit.jupiter.api.Assertions.assertNotNull;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.ArgumentMatchers.argThat;
 import static org.mockito.Mockito.doNothing;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
@@ -35,6 +36,7 @@ import java.math.BigDecimal;
 import java.time.ZonedDateTime;
 import java.util.List;
 import java.util.Optional;
+import java.util.Objects;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.mockito.ArgumentCaptor;
@@ -98,7 +100,7 @@ class OrderServiceTest {
 
     @Test
     void getAllOrder_whenEmptyPage_returnsEmptyListVm() {
-        when(orderRepository.findAll((Specification<Order>) any(), any(Pageable.class))).thenReturn(Page.empty());
+        when(orderRepository.findAll(argThat(Objects::nonNull), any(Pageable.class))).thenReturn(Page.empty());
 
         var result = orderService.getAllOrder(
             org.springframework.data.util.Pair.of(ZonedDateTime.now().minusDays(1), ZonedDateTime.now()),
@@ -138,7 +140,7 @@ class OrderServiceTest {
     void isOrderCompletedWithUserIdAndProductId_whenNoVariations_returnsFalse() {
         setSubjectUpSecurityContext("user-1");
         when(productService.getProductVariations(1L)).thenReturn(List.of());
-        when(orderRepository.findOne((Specification<Order>) any())).thenReturn(Optional.empty());
+        when(orderRepository.findOne(argThat(Objects::nonNull))).thenReturn(Optional.empty());
 
         OrderExistsByProductAndUserGetVm result = orderService.isOrderCompletedWithUserIdAndProductId(1L);
 
@@ -150,7 +152,7 @@ class OrderServiceTest {
         setSubjectUpSecurityContext("user-1");
         when(productService.getProductVariations(2L))
             .thenReturn(List.of(new ProductVariationVm(21L, "v1", "sku1")));
-        when(orderRepository.findOne((Specification<Order>) any())).thenReturn(Optional.of(buildOrder(20L)));
+        when(orderRepository.findOne(argThat(Objects::nonNull))).thenReturn(Optional.of(buildOrder(20L)));
 
         OrderExistsByProductAndUserGetVm result = orderService.isOrderCompletedWithUserIdAndProductId(2L);
 
@@ -225,7 +227,7 @@ class OrderServiceTest {
 
     @Test
     void exportCsv_whenOrderListNull_returnsCsvBytes() throws IOException {
-        when(orderRepository.findAll((Specification<Order>) any(), any(Pageable.class))).thenReturn(Page.empty());
+        when(orderRepository.findAll(argThat(Objects::nonNull), any(Pageable.class))).thenReturn(Page.empty());
 
         OrderRequest request = OrderRequest.builder()
             .createdFrom(ZonedDateTime.now().minusDays(1))
@@ -243,7 +245,7 @@ class OrderServiceTest {
     void exportCsv_whenOrderListPresent_returnsCsvBytes() throws IOException {
         Order order = buildOrder(50L);
         Page<Order> page = new PageImpl<>(List.of(order));
-        when(orderRepository.findAll((Specification<Order>) any(), any(Pageable.class))).thenReturn(page);
+        when(orderRepository.findAll(argThat(Objects::nonNull), any(Pageable.class))).thenReturn(page);
         when(orderMapper.toCsv(any())).thenReturn(OrderItemCsv.builder().build());
 
         OrderRequest request = OrderRequest.builder()
