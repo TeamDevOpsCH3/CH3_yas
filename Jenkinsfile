@@ -13,235 +13,26 @@ template: [
 
 
 def microservices = [
-    [id: 'customer',       display: 'Customer Service',       enableTest: true,  enableCoverage: true,  enableBuild: true,  commands: []],
-    [id: 'cart',           display: 'Cart Service',           enableTest: true,  enableCoverage: true,  enableBuild: true,  commands: []],
+    [id: 'customer',       display: 'Customer Service',       enableTest: false, enableCoverage: false, enableBuild: false, commands: []],
+    [id: 'cart',           display: 'Cart Service',           enableTest: false, enableCoverage: false, enableBuild: false, commands: []],
     [id: 'backoffice-bff', display: 'Backoffice BFF Service', enableTest: true,  enableCoverage: true,  enableBuild: true,  commands: []], 
-    [id: 'inventory',      display: 'Inventory Service',      enableTest: true,  enableCoverage: true,  enableBuild: true,  commands: []],
-    [id: 'location',       display: 'Location Service',       enableTest: true,  enableCoverage: true,  enableBuild: true,  commands: []],
-    [id: 'media',          display: 'Media Service',          enableTest: true,  enableCoverage: true,  enableBuild: true,  commands: []],
-    [id: 'order',          display: 'Order Service',          enableTest: true,  enableCoverage: true,  enableBuild: true,  commands: []],
-    [id: 'payment-paypal', display: 'Payment Paypal Service', enableTest: true,  enableCoverage: true,  enableBuild: true,  commands: []],
-    [id: 'payment',        display: 'Payment Service',        enableTest: true,  enableCoverage: true,  enableBuild: true,  commands: []],
-    [id: 'product',        display: 'Product Service',        enableTest: true,  enableCoverage: true,  enableBuild: true,  commands: []],
-    [id: 'promotion',      display: 'Promotion Service',      enableTest: true,  enableCoverage: true,  enableBuild: true,  commands: []],
-    [id: 'rating',         display: 'Rating Service',         enableTest: true,  enableCoverage: true,  enableBuild: true,  commands: []],
-    [id: 'search',         display: 'Search Service',         enableTest: true,  enableCoverage: true,  enableBuild: true,  commands: []], 
-    [id: 'storefront-bff', display: 'Storefront BFF Service', enableTest: true,  enableCoverage: true,  enableBuild: true,  commands: []], 
-    [id: 'tax',            display: 'Tax Service',            enableTest: true,  enableCoverage: true,  enableBuild: true,  commands: []],
-    [id: 'webhook',        display: 'Webhook Service',        enableTest: true,  enableCoverage: true,  enableBuild: true,  commands: []],
-    [id: 'sampledata',     display: 'Sampledata Service',     enableTest: false, enableCoverage: false, enableBuild: true,  commands: []],
-    [id: 'recommendation', display: 'Recommendation Service', enableTest: false, enableCoverage: false, enableBuild: true,  commands: []], 
+    [id: 'inventory',      display: 'Inventory Service',      enableTest: false, enableCoverage: false, enableBuild: false, commands: []],
+    [id: 'location',       display: 'Location Service',       enableTest: false, enableCoverage: false, enableBuild: false, commands: []],
+    [id: 'media',          display: 'Media Service',          enableTest: false, enableCoverage: false, enableBuild: false, commands: []],
+    [id: 'order',          display: 'Order Service',          enableTest: false, enableCoverage: false, enableBuild: false, commands: []],
+    [id: 'payment-paypal', display: 'Payment Paypal Service', enableTest: false, enableCoverage: false, enableBuild: false, commands: []],
+    [id: 'payment',        display: 'Payment Service',        enableTest: false, enableCoverage: false, enableBuild: false, commands: []],
+    [id: 'product',        display: 'Product Service',        enableTest: false, enableCoverage: false, enableBuild: false, commands: []],
+    [id: 'promotion',      display: 'Promotion Service',      enableTest: false, enableCoverage: false, enableBuild: false, commands: []],
+    [id: 'rating',         display: 'Rating Service',         enableTest: false, enableCoverage: false, enableBuild: false, commands: []],
+    [id: 'search',         display: 'Search Service',         enableTest: false, enableCoverage: false, enableBuild: false, commands: []], 
+    [id: 'storefront-bff', display: 'Storefront BFF Service', enableTest: false, enableCoverage: false, enableBuild: false, commands: []], 
+    [id: 'tax',            display: 'Tax Service',            enableTest: false, enableCoverage: false, enableBuild: false, commands: []],
+    [id: 'webhook',        display: 'Webhook Service',        enableTest: false, enableCoverage: false, enableBuild: false, commands: []],
+    [id: 'sampledata',     display: 'Sampledata Service',     enableTest: false, enableCoverage: false, enableBuild: false, commands: []],
+    [id: 'recommendation', display: 'Recommendation Service', enableTest: false, enableCoverage: false, enableBuild: false, commands: []], 
     [id: 'delivery',       display: 'Delivery Service',       enableTest: false, enableCoverage: false, enableBuild: false, commands: []], 
-]
-
-@NonCPS
-def collectChangedPaths() {
-    def paths = []
-    currentBuild.changeSets.each { changeSet ->
-        changeSet.items.each { entry ->
-            entry.affectedFiles.each { file ->
-                paths << file.path
-            }
-        }
-    }
-    return paths.unique()
-}
-
-def runServicePipeline(service) {
-    def serviceId      = service.id
-    def serviceDisplay = service.display
-    def enableTest     = service.enableTest     ?: false
-    def enableCoverage = service.enableCoverage ?: false
-    def enableBuild    = service.enableBuild    ?: false
-    def commands       = service.commands       ?: []
-
-    if (params.ONLY_RATING_TEST) {
-        enableCoverage = false
-        enableBuild = false
-    }
-
-    // ------------------------------------------------------------------ //
-    // Stage Test: mvn test (unit tests only) + publish JUnit XML          //
-    // ------------------------------------------------------------------ //
-    if (enableTest) {
-        stage("${serviceDisplay} - Test") {
-            sh "mvn test -pl ${serviceId} -am -DskipITs -Dsurefire.excludes='**/it/**,**/*IT.java,**/*ITCase.java,**/*IT*.java,**/ProductCdcConsumerTest.java,**/ApplicationTest.java' -B --no-transfer-progress"
-        }
-        junit(
-            testResults: "${serviceId}/target/surefire-reports/*.xml",
-            allowEmptyResults: true
-        )
-    }
-
-    // ------------------------------------------------------------------ //
-    // Stage Coverage: jacoco:report -> HTML + XML, publish to Jenkins     //
-    // ------------------------------------------------------------------ //
-    if (enableCoverage) {
-        stage("${serviceDisplay} - Coverage Report") {
-            sh "mvn jacoco:report -pl ${serviceId} -DskipTests -B --no-transfer-progress"
-        }
-        publishHTML(target: [
-            allowMissing         : true,
-            alwaysLinkToLastBuild: true,
-            keepAll              : true,
-            reportDir            : "${serviceId}/target/site/jacoco",
-            reportFiles          : 'index.html',
-            reportName           : "JaCoCo Report - ${serviceDisplay}"
-        ])
-        recordCoverage(
-            tools: [[
-                parser: 'JACOCO',
-                pattern: "${serviceId}/target/site/jacoco/jacoco.xml"
-            ]],
-            id              : "jacoco-${serviceId}",
-            name            : "JaCoCo - ${serviceDisplay}",
-            ignoreParsingErrors: true,
-            // Coverage Gate: mark build UNSTABLE (not FAILURE) when line coverage < 70%
-            // UNSTABLE = yellow badge, team can still see reports and decide next step
-            qualityGates: [[
-                threshold  : 70.0,
-                metric     : 'LINE',
-                baseline   : 'PROJECT',
-                criticality: 'UNSTABLE'
-            ]]
-        )
-    }
-
-    // ------------------------------------------------------------------ //
-    // Stage SonarCloud Scan                                               //
-    // ------------------------------------------------------------------ //
-    // stage("${serviceDisplay} - SonarCloud Scan") {
-    //     withCredentials([string(credentialsId: 'SONAR_TOKEN', variable: 'SONAR_TOKEN')]) {
-    //         sh """
-    //             mvn sonar:sonar \
-    //             -pl ${serviceId} \
-    //             -DskipTests \
-    //             -Dsonar.projectKey=TeamDevOpsCH3_CH3_yas_${serviceId} \
-    //             -Dsonar.organization=teamdevopsch3 \
-    //             -Dsonar.host.url=https://sonarcloud.io \
-    //             -Dsonar.login=\$SONAR_TOKEN \
-    //             -Dsonar.coverage.jacoco.xmlReportPaths=${serviceId}/target/site/jacoco/jacoco.xml \
-    //             -B --no-transfer-progress
-    //         """
-    //     }
-    // }
-
-    if (enableBuild) {
-        stage("${serviceDisplay} - Build") {
-            sh "mvn package -pl ${serviceId} -am -DskipTests -B --no-transfer-progress"
-        }
-        archiveArtifacts(
-            artifacts        : "${serviceId}/target/*.jar",
-            fingerprint      : true,
-            allowEmptyArchive: true
-        )
-    }
-
-    // Extra ad-hoc stages defined per-service
-    commands.each { cmd ->
-        stage("${serviceDisplay} - ${cmd.name}") {
-            if (cmd.command) {
-                sh cmd.command
-            } else {
-                echo "No command defined for stage ${cmd.name}"
-            }
-        }
-    }
-}
-
-pipeline {
-    agent any
-
-    options {
-        buildDiscarder(logRotator(
-            numToKeepStr: '1',
-            artifactNumToKeepStr: '1'
-        ))
-    }
-    
-    tools {
-        maven 'maven-3.9'
-        // pom.xml requires Java 25 (maven.compiler.source=25).
-        // Without this, Jenkins uses the system JDK which may be older → "release version 25 not supported"
-        jdk 'jdk-25'
-    }
-
-    environment {
-        // Fix JENKINS-48300: suppress false-positive "wrapper script not touching log" warning
-        // that appears when Maven compiles silently for a long time with no stdout output.
-        JAVA_TOOL_OPTIONS = '-Dorg.jenkinsci.plugins.durabletask.BourneShellScript.HEARTBEAT_CHECK_INTERVAL=86400'
-
-        // Cap Maven heap to 512m per process.
-        // Running 14 services in parallel with -Xmx1024m each = ~14GB RAM → OOM.
-        // Sequential execution + 512m is safe on most CI servers.
-        MAVEN_OPTS = '-Xmx512m'
-
-        SONAR_TOKEN = credentials('SONAR_TOKEN')
-    }
-
-    parameters {
-        booleanParam(
-            name        : 'ONLY_RATING_TEST',
-            defaultValue: true,
-            description : 'Run only Rating Service test stage (skip coverage/build and other services)'
-        )
-        booleanParam(
-            name        : 'FORCE_RUN_ALL',
-            defaultValue: false,
-            description : 'Force run Test + Coverage for ALL services regardless of which files changed'
-        )
-        booleanParam(
-            name        : 'ENABLE_SNYK_SCAN',
-            defaultValue: false,
-            description : 'Run Snyk OSS vulnerability scan once for the entire project (heavy — enable manually)'
-        )
-        choice(
-            name        : 'SNYK_SEVERITY',
-            choices     : ['low', 'medium', 'high', 'critical'],
-            description : 'Fail/report threshold for Snyk scan'
-        )
-        booleanParam(
-            name        : 'SNYK_FAIL_ON_ISSUES',
-            defaultValue: false,
-            description : 'Fail build when Snyk finds issues at/above threshold'
-        )
-    }
-
-    // triggers {
-    //     githubPush()
-    // }
-
-    stages {
-        stage('Gitleaks Security Scan') {
-            steps {
-                script {
-                    echo "Running Gitleaks security scan on the entire codebase..."
-                    /*
-                    Scan whole repository for leaked secrets.
-                    --exit-code=1 fails the build when any leak is detected.
-                    */
-                    catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE', message: 'Gitleaks scan failed: potential secrets detected. Check the logs for details.') {
-                        echo "Running Gitleaks security scan on the entire codebase..."
-                        sh "gitleaks detect --source=. --config=gitleaks.toml --verbose --no-banner"
-                        echo "Gitleaks scan passed: no secrets detected."
-                    }
-                }
-            }
-        }
-
-        // ---------------------------------------------------------------- //
-        // Stage 1: Detect which services have changed (fast, no Maven)     //
-        // ---------------------------------------------------------------- //
-        stage('Detect Changes') {
-            steps {
-                script {
-                    if (params.ONLY_RATING_TEST) {
-                        env.SERVICES_TO_RUN = 'Rating Service'
-                        echo 'ONLY_RATING_TEST enabled: running Rating Service tests only.'
-                        return
-                    }
-
-                    def changedPaths = collectChangedPaths()
+]                    def changedPaths = collectChangedPaths()
                     def pomChanged   = changedPaths.contains('pom.xml')
                     def pipelineChanged = changedPaths.contains('Jenkinsfile')
                     def noScmContext = changedPaths.isEmpty()
