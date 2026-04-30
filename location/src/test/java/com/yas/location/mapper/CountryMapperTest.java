@@ -5,9 +5,16 @@ import static org.assertj.core.api.Assertions.assertThat;
 import com.yas.location.model.Country;
 import com.yas.location.viewmodel.country.CountryPostVm;
 import com.yas.location.viewmodel.country.CountryVm;
+import java.util.stream.Stream;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.junit.jupiter.params.ParameterizedTest;
+import org.junit.jupiter.params.provider.Arguments;
+import org.junit.jupiter.params.provider.MethodSource;
 import org.mapstruct.factory.Mappers;
+import org.mockito.junit.jupiter.MockitoExtension;
 
+@ExtendWith(MockitoExtension.class)
 class CountryMapperTest {
 
     private final CountryMapper mapper = Mappers.getMapper(CountryMapper.class);
@@ -81,6 +88,51 @@ class CountryMapperTest {
 
         assertThat(existing.getName()).isEqualTo("New Name");
         assertThat(existing.getCode2()).isEqualTo("NEW");
+    }
+
+    @Test
+    void updateCountry_whenDtoNull_keepsValues() {
+        Country existing = Country.builder()
+            .id(1L)
+            .name("Old Name")
+            .code2("OLD")
+            .build();
+
+        mapper.toCountryFromCountryPostViewModel(existing, null);
+
+        assertThat(existing.getName()).isEqualTo("Old Name");
+        assertThat(existing.getCode2()).isEqualTo("OLD");
+    }
+
+    @ParameterizedTest
+    @MethodSource("nullableFlags")
+    void toCountryFromPostVm_mapsNullableFlags(Boolean billing, Boolean shipping,
+                                               Boolean city, Boolean zip, Boolean district) {
+        CountryPostVm postVm = CountryPostVm.builder()
+            .id("id")
+            .code2("US")
+            .name("United States")
+            .isBillingEnabled(billing)
+            .isShippingEnabled(shipping)
+            .isCityEnabled(city)
+            .isZipCodeEnabled(zip)
+            .isDistrictEnabled(district)
+            .build();
+
+        Country country = mapper.toCountryFromCountryPostViewModel(postVm);
+
+        assertThat(country.getIsBillingEnabled()).isEqualTo(billing);
+        assertThat(country.getIsShippingEnabled()).isEqualTo(shipping);
+        assertThat(country.getIsCityEnabled()).isEqualTo(city);
+        assertThat(country.getIsZipCodeEnabled()).isEqualTo(zip);
+        assertThat(country.getIsDistrictEnabled()).isEqualTo(district);
+    }
+
+    private static Stream<Arguments> nullableFlags() {
+        return Stream.of(
+            Arguments.of(null, null, null, null, null),
+            Arguments.of(true, false, null, true, false)
+        );
     }
 
     @Test
