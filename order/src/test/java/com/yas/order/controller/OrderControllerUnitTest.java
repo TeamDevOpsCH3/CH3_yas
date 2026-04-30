@@ -18,6 +18,7 @@ import com.yas.order.viewmodel.order.OrderPostVm;
 import com.yas.order.viewmodel.order.OrderVm;
 import com.yas.order.viewmodel.order.PaymentOrderStatusVm;
 import java.io.IOException;
+import java.time.ZonedDateTime;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
@@ -105,9 +106,12 @@ class OrderControllerUnitTest {
         OrderListVm listVm = new OrderListVm(List.of(OrderBriefVm.builder().id(1L).build()), 1, 1);
         when(orderService.getAllOrder(any(), any(), any(), any(), any(), any())).thenReturn(listVm);
 
+        ZonedDateTime createdFrom = ZonedDateTime.now().minusDays(1);
+        ZonedDateTime createdTo = ZonedDateTime.now();
+
         var response = orderController.getOrders(
-            null,
-            null,
+            createdFrom,
+            createdTo,
             "",
             List.of(),
             "",

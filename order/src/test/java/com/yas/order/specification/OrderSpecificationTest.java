@@ -261,6 +261,9 @@ class OrderSpecificationTest {
         when(query.subquery(OrderItem.class)).thenReturn(subqueryMock);
         when(subqueryMock.from(OrderItem.class)).thenReturn(orderItemRoot);
 
+        Predicate existsPredicate = mock(Predicate.class);
+        when(criteriaBuilder.exists(subqueryMock)).thenReturn(existsPredicate);
+
         Path orderIdPath = mock(Path.class);
         when(orderItemRoot.get("orderId")).thenReturn(orderIdPath);
         when(root.get("id")).thenReturn(mock(Path.class));

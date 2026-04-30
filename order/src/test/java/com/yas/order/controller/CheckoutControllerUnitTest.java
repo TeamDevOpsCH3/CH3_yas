@@ -3,6 +3,7 @@ package com.yas.order.controller;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
+import static org.mockito.Mockito.doThrow;
 import static org.mockito.Mockito.verify;
 import static org.mockito.Mockito.when;
 
@@ -80,8 +81,9 @@ class CheckoutControllerUnitTest {
 
     @Test
     void updatePaymentMethod_whenNotFound_propagates() {
-        when(checkoutService.updateCheckoutPaymentMethod("id", new CheckoutPaymentMethodPutVm("pay")))
-            .thenThrow(new NotFoundException("CHECKOUT_NOT_FOUND"));
+        doThrow(new NotFoundException("CHECKOUT_NOT_FOUND"))
+            .when(checkoutService)
+            .updateCheckoutPaymentMethod("id", new CheckoutPaymentMethodPutVm("pay"));
 
         assertThrows(NotFoundException.class,
             () -> checkoutController.updatePaymentMethod("id", new CheckoutPaymentMethodPutVm("pay")));

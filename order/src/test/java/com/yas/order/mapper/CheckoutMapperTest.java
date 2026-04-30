@@ -7,6 +7,7 @@ import com.yas.order.viewmodel.checkout.CheckoutPostVm;
 import org.assertj.core.api.Assertions;
 import org.instancio.Instancio;
 import static org.instancio.Select.field;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.extension.ExtendWith;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -15,6 +16,7 @@ import org.springframework.test.context.junit.jupiter.SpringExtension;
 
 @ExtendWith(SpringExtension.class)
 @SpringBootTest(classes = {CheckoutMapperImpl.class})
+@Tag("spring")
 class CheckoutMapperTest {
 
     @Autowired
