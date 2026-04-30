@@ -5,7 +5,7 @@ import org.springframework.boot.test.context.SpringBootTest;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 import org.springframework.security.oauth2.client.registration.ReactiveClientRegistrationRepository;
 
-//Trigger pipeline
+//Trigger pipeline again
 @SpringBootTest
 class ApplicationTest {
 
