@@ -222,8 +222,7 @@ pipeline {
                     */
                     catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE', message: 'Gitleaks scan failed: potential secrets detected. Check the logs for details.') {
                         echo "Running Gitleaks security scan on the entire codebase..."
-                        sh "gitleaks detect --source=. --config=gitleaks.toml --verbose --no-banner --exit-code 0"
-                        echo "Gitleaks scan passed: no secrets detected."
+                        sh "gitleaks detect --source=. --config=gitleaks.toml --verbose --no-banner"
                     }
                 }
             }
