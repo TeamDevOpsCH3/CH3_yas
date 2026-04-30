@@ -182,7 +182,7 @@ pipeline {
     parameters {
         booleanParam(
             name        : 'ONLY_RATING_TEST',
-            defaultValue: true,
+            defaultValue: false,
             description : 'Run only Rating Service test stage (skip coverage/build and other services)'
         )
         booleanParam(
