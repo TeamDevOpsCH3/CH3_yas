@@ -1,5 +1,6 @@
 package com.yas.customer.util;
 
+import static org.mockito.Mockito.lenient;
 import static org.mockito.Mockito.mock;
 import static org.mockito.Mockito.when;
 
@@ -15,12 +16,12 @@ public class SecurityContextUtils {
 
     public static void setUpSecurityContext(String userName) {
         Authentication auth = mock(Authentication.class);
-        when(auth.getName()).thenReturn(userName);
+        lenient().when(auth.getName()).thenReturn(userName);
         Jwt jwt = mock(Jwt.class);
-        when(auth.getPrincipal()).thenReturn(jwt);
-        when(jwt.getTokenValue()).thenReturn("token");
+        lenient().when(auth.getPrincipal()).thenReturn(jwt);
+        lenient().when(jwt.getTokenValue()).thenReturn("token");
         SecurityContext securityContext = mock(SecurityContext.class);
-        when(securityContext.getAuthentication()).thenReturn(auth);
+        lenient().when(securityContext.getAuthentication()).thenReturn(auth);
         SecurityContextHolder.setContext(securityContext);
     }
 

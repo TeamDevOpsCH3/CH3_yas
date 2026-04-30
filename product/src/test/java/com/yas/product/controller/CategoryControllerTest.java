@@ -134,12 +134,36 @@ class CategoryControllerTest {
                 .andExpect(status().isBadRequest());
     }
 
+    @Test
+    void testDeleteCategoryWithChildren() throws Exception {
+        Category category = createCategory();
+        Category childCategory = new Category();
+        category.setCategories(java.util.List.of(childCategory));
+        when(categoryRepository.findById(1L)).thenReturn(Optional.of(category));
+
+        mockMvc.perform(delete("/backoffice/categories/1"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void testDeleteCategoryWithProducts() throws Exception {
+        Category category = createCategory();
+        com.yas.product.model.ProductCategory productCategory = new com.yas.product.model.ProductCategory();
+        category.setProductCategories(java.util.List.of(productCategory));
+        when(categoryRepository.findById(1L)).thenReturn(Optional.of(category));
+
+        mockMvc.perform(delete("/backoffice/categories/1"))
+                .andExpect(status().isBadRequest());
+    }
+
     private Category createCategory() {
         Category category = new Category();
         category.setId(1L);
         category.setName("Electronic");
         category.setDescription("electronics, gadgets, technology");
         category.setDisplayOrder((short) 1);
+        category.setCategories(new java.util.ArrayList<>());
+        category.setProductCategories(new java.util.ArrayList<>());
         return category;
     }
 }
