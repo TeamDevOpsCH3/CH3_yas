@@ -13,6 +13,7 @@ import com.yas.commonlibrary.exception.NotFoundException;
 import com.yas.order.mapper.OrderMapper;
 import com.yas.order.model.Order;
 import com.yas.order.model.OrderAddress;
+import com.yas.order.model.OrderItem;
 import com.yas.order.model.csv.OrderItemCsv;
 import com.yas.order.model.enumeration.DeliveryMethod;
 import com.yas.order.model.enumeration.DeliveryStatus;
