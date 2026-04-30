@@ -9,7 +9,10 @@ import com.yas.order.model.enumeration.OrderStatus;
 import com.yas.order.model.enumeration.PaymentStatus;
 import java.math.BigDecimal;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.junit.jupiter.MockitoExtension;
 
+@ExtendWith(MockitoExtension.class)
 class OrderModelTest {
 
     @Test
@@ -65,5 +68,13 @@ class OrderModelTest {
         assertThat(checkout.getTotalShipmentFee()).isEqualByComparingTo(BigDecimal.ZERO);
         assertThat(checkout.getTotalShipmentTax()).isEqualByComparingTo(BigDecimal.ZERO);
         assertThat(checkout.getTotalDiscountAmount()).isEqualByComparingTo(BigDecimal.ZERO);
+    }
+
+    @Test
+    void checkoutBuilder_defaultsItemsToEmptyList() {
+        Checkout checkout = Checkout.builder().id("c2").build();
+
+        assertThat(checkout.getCheckoutItems()).isNotNull();
+        assertThat(checkout.getCheckoutItems()).isEmpty();
     }
 }

@@ -130,6 +130,11 @@ class OrderServiceTest {
     }
 
     @Test
+    void getLatestOrders_whenCountNegative_returnsEmpty() {
+        assertThat(orderService.getLatestOrders(-1)).isEmpty();
+    }
+
+    @Test
     void getLatestOrders_whenRepositoryEmpty_returnsEmpty() {
         when(orderRepository.getLatestOrders(any(Pageable.class))).thenReturn(List.of());
 

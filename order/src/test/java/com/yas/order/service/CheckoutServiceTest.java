@@ -179,6 +179,17 @@ class CheckoutServiceTest {
         assertThat(res.checkoutItemVms()).isNull();
     }
 
+        @Test
+        void testGetCheckoutPendingStateWithItemsById_whenCheckoutItemsNull_returnCheckoutVmWithoutItems() {
+                checkoutCreated.setCheckoutItems(null);
+                when(checkoutRepository.findByIdAndCheckoutState(anyString(), eq(CheckoutState.PENDING)))
+                                .thenReturn(Optional.ofNullable(checkoutCreated));
+
+                var res = checkoutService.getCheckoutPendingStateWithItemsById("1");
+
+                assertThat(res.checkoutItemVms()).isNull();
+        }
+
     @Test
     void testUpdateCheckoutPaymentMethod_whenCheckoutExists_thenUpdatePaymentMethod() {
         // Arrange
