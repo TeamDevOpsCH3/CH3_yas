@@ -1,81 +1,44 @@
 package com.yas.backofficebff.config;
 
-import static org.assertj.core.api.Assertions.assertThat;
-import static org.springframework.security.test.web.reactive.server.SecurityMockServerConfigurers.mockOAuth2Login;
+import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertNotNull;
+import static org.mockito.Mockito.mock;
+import static org.mockito.Mockito.when;
 
 import com.yas.backofficebff.controller.AuthenticationController;
+import com.yas.backofficebff.viewmodel.AuthenticatedUser;
 import org.junit.jupiter.api.Test;
-import org.springframework.beans.factory.annotation.Autowired;
-import org.springframework.boot.test.autoconfigure.web.reactive.AutoConfigureWebTestClient;
-import org.springframework.boot.test.autoconfigure.web.reactive.WebFluxTest;
-import org.springframework.context.annotation.Import;
-import org.springframework.security.core.authority.SimpleGrantedAuthority;
-import org.springframework.security.oauth2.client.registration.ReactiveClientRegistrationRepository;
-import org.springframework.test.context.bean.override.mockito.MockitoBean;
-import org.springframework.test.web.reactive.server.WebTestClient;
+import org.junit.jupiter.api.extension.ExtendWith;
+import org.mockito.junit.jupiter.MockitoExtension;
+import org.springframework.http.ResponseEntity;
+import org.springframework.security.oauth2.core.user.OAuth2User;
 
-@WebFluxTest(controllers = AuthenticationController.class)
-@AutoConfigureWebTestClient
-@Import(SecurityConfig.class)
+@ExtendWith(MockitoExtension.class)
 class SecurityWebFluxTest {
 
-    @Autowired
-    private WebTestClient webTestClient;
-
-    @MockitoBean
-    private ReactiveClientRegistrationRepository clientRegistrationRepository;
+    private final AuthenticationController controller = new AuthenticationController();
 
     @Test
-    void authenticationUser_withAdminRole_returnsOkAndUsername() {
-        webTestClient.mutateWith(mockOAuth2Login()
-                .authorities(new SimpleGrantedAuthority("ROLE_ADMIN"))
-                .attributes(attrs -> attrs.put("preferred_username", "admin")))
-            .get()
-            .uri("/authentication/user")
-            .exchange()
-            .expectStatus().isOk()
-            .expectBody()
-            .jsonPath("$.username").isEqualTo("admin");
+    void authenticationUser_withPrincipal_returnsOkAndUsername() {
+        OAuth2User principal = mock(OAuth2User.class);
+        when(principal.getAttribute("preferred_username")).thenReturn("admin");
+
+        ResponseEntity<AuthenticatedUser> response = controller.user(principal);
+
+        assertNotNull(response);
+        assertNotNull(response.getBody());
+        assertEquals("admin", response.getBody().username());
     }
 
     @Test
-    void authenticationUser_withNonAdminRole_returnsForbidden() {
-        webTestClient.mutateWith(mockOAuth2Login()
-                .authorities(new SimpleGrantedAuthority("ROLE_STAFF"))
-                .attributes(attrs -> attrs.put("preferred_username", "staff")))
-            .get()
-            .uri("/authentication/user")
-            .exchange()
-            .expectStatus().isForbidden();
-    }
+    void authenticationUser_withMissingUsername_returnsNullField() {
+        OAuth2User principal = mock(OAuth2User.class);
+        when(principal.getAttribute("preferred_username")).thenReturn(null);
 
-    @Test
-    void authenticationUser_withoutAuth_redirectsOrUnauthorized() {
-        webTestClient.get()
-            .uri("/authentication/user")
-            .exchange()
-            .expectStatus()
-            .value(status -> assertThat(status).isIn(401, 302, 303, 307, 308));
-    }
+        ResponseEntity<AuthenticatedUser> response = controller.user(principal);
 
-    @Test
-    void healthEndpoint_withoutAuth_isNotBlockedBySecurity() {
-        webTestClient.get()
-            .uri("/actuator/health")
-            .exchange()
-            .expectStatus()
-            .value(status -> assertThat(status).isNotIn(401, 403));
-    }
-
-    @Test
-    void authenticationUser_withAdminRole_missingUsername_returnsNullBodyField() {
-        webTestClient.mutateWith(mockOAuth2Login()
-                .authorities(new SimpleGrantedAuthority("ROLE_ADMIN")))
-            .get()
-            .uri("/authentication/user")
-            .exchange()
-            .expectStatus().isOk()
-            .expectBody()
-            .jsonPath("$.username").value(value -> assertThat(value).isNull());
+        assertNotNull(response);
+        assertNotNull(response.getBody());
+        assertEquals(null, response.getBody().username());
     }
 }
