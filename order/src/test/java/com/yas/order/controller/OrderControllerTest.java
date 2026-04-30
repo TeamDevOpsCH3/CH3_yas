@@ -40,6 +40,7 @@ import java.util.List;
 import java.util.Set;
 import java.util.UUID;
 import org.junit.jupiter.api.BeforeEach;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 
 import org.springframework.beans.factory.annotation.Autowired;
@@ -54,6 +55,7 @@ import org.springframework.test.web.servlet.result.MockMvcResultMatchers;
 @WebMvcTest(controllers = OrderController.class,
     excludeAutoConfiguration = OAuth2ResourceServerAutoConfiguration.class)
 @AutoConfigureMockMvc(addFilters = false)
+@Tag("spring")
 class OrderControllerTest {
 
     @MockitoBean

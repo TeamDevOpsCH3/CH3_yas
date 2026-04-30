@@ -2,7 +2,7 @@ package com.yas.order.utils;
 
 public final class Constants {
 
-    public final class ErrorCode {
+    public static final class ErrorCode {
 
         private ErrorCode() {
         }
@@ -13,7 +13,7 @@ public final class Constants {
         public static final String SIGN_IN_REQUIRED = "SIGN_IN_REQUIRED";
     }
 
-    public final class MessageCode {
+    public static final class MessageCode {
 
         private MessageCode() {
         }
@@ -23,7 +23,7 @@ public final class Constants {
         public static final String UPDATE_CHECKOUT_PAYMENT = "Update checkout {} PAYMENT from {} to {}";
     }
 
-    public final class Column {
+    public static final class Column {
 
         private Column() {
         }
