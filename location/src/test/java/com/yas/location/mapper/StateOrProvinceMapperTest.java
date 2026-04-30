@@ -28,4 +28,9 @@ class StateOrProvinceMapperTest {
         assertThat(vm.id()).isEqualTo(10L);
         assertThat(vm.countryId()).isEqualTo(5L);
     }
+
+    @Test
+    void toVm_whenNull_returnsNull() {
+        assertThat(mapper.toStateOrProvinceViewModelFromStateOrProvince(null)).isNull();
+    }
 }

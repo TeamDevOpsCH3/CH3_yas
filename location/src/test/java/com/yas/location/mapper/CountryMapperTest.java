@@ -36,6 +36,11 @@ class CountryMapperTest {
     }
 
     @Test
+    void toCountryFromPostVm_whenNull_returnsNull() {
+        assertThat(mapper.toCountryFromCountryPostViewModel(null)).isNull();
+    }
+
+    @Test
     void updateCountry_ignoresNullValues() {
         Country existing = Country.builder()
             .id(1L)
@@ -59,6 +64,26 @@ class CountryMapperTest {
     }
 
     @Test
+    void updateCountry_overwritesWhenValuesPresent() {
+        Country existing = Country.builder()
+            .id(1L)
+            .name("Old Name")
+            .code2("OLD")
+            .build();
+
+        CountryPostVm postVm = CountryPostVm.builder()
+            .id("id")
+            .name("New Name")
+            .code2("NEW")
+            .build();
+
+        mapper.toCountryFromCountryPostViewModel(existing, postVm);
+
+        assertThat(existing.getName()).isEqualTo("New Name");
+        assertThat(existing.getCode2()).isEqualTo("NEW");
+    }
+
+    @Test
     void toCountryVm_mapsFields() {
         Country country = Country.builder()
             .id(2L)
@@ -77,5 +102,10 @@ class CountryMapperTest {
         assertThat(vm.id()).isEqualTo(2L);
         assertThat(vm.name()).isEqualTo("Canada");
         assertThat(vm.isZipCodeEnabled()).isTrue();
+    }
+
+    @Test
+    void toCountryVm_whenNull_returnsNull() {
+        assertThat(mapper.toCountryViewModelFromCountry(null)).isNull();
     }
 }
