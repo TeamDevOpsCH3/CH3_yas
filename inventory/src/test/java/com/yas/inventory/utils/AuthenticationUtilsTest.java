@@ -10,6 +10,7 @@ import org.junit.jupiter.api.Test;
 import org.springframework.security.authentication.AnonymousAuthenticationToken;
 import org.springframework.security.core.authority.SimpleGrantedAuthority;
 import org.springframework.security.core.context.SecurityContextHolder;
+import org.springframework.security.core.context.SecurityContextImpl;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 
@@ -27,7 +28,9 @@ class AuthenticationUtilsTest {
             "anonymous",
             List.of(new SimpleGrantedAuthority("ROLE_ANONYMOUS"))
         );
-        SecurityContextHolder.getContext().setAuthentication(auth);
+        SecurityContextImpl context = new SecurityContextImpl();
+        context.setAuthentication(auth);
+        SecurityContextHolder.setContext(context);
 
         assertThrows(AccessDeniedException.class, AuthenticationUtils::extractUserId);
     }
