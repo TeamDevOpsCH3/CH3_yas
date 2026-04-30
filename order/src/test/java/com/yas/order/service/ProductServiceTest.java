@@ -132,13 +132,10 @@ class ProductServiceTest {
 
     @Test
     void subtractProductStockQuantity_sendsProductQuantities() {
-        RestClient.RequestBodyUriSpec requestBodyUriSpec = mock(RestClient.RequestBodyUriSpec.class);
-        RestClient.RequestBodySpec requestBodySpec = mock(RestClient.RequestBodySpec.class);
+        RestClient.RequestBodyUriSpec requestBodyUriSpec =
+            mock(RestClient.RequestBodyUriSpec.class, Mockito.RETURNS_SELF);
         when(restClient.put()).thenReturn(requestBodyUriSpec);
-        when(requestBodyUriSpec.uri(any(URI.class))).thenReturn(requestBodyUriSpec);
-        when(requestBodyUriSpec.headers(any())).thenReturn(requestBodyUriSpec);
-        when(requestBodyUriSpec.body(any())).thenReturn(requestBodySpec);
-        when(requestBodySpec.retrieve()).thenReturn(responseSpec);
+        when(requestBodyUriSpec.retrieve()).thenReturn(responseSpec);
 
         OrderItemVm item = OrderItemVm.builder()
             .productId(101L)

@@ -80,7 +80,11 @@ class OrderServiceTest {
         OrderPostVm orderPostVm = buildOrderPostVm();
         Order savedOrder = buildOrder(10L);
 
-        when(orderRepository.save(any(Order.class))).thenReturn(savedOrder);
+        when(orderRepository.save(any(Order.class))).thenAnswer(invocation -> {
+            Order order = invocation.getArgument(0);
+            order.setId(10L);
+            return order;
+        });
         when(orderRepository.findById(10L)).thenReturn(Optional.of(savedOrder));
         when(orderItemRepository.saveAll(any())).thenAnswer(invocation -> {
             Collection<OrderItem> items = invocation.getArgument(0);
@@ -236,6 +240,7 @@ class OrderServiceTest {
         OrderRequest request = OrderRequest.builder()
             .createdFrom(ZonedDateTime.now().minusDays(1))
             .createdTo(ZonedDateTime.now())
+            .orderStatus(List.of())
             .billingCountry("")
             .billingPhoneNumber("")
             .pageNo(0)
@@ -257,6 +262,7 @@ class OrderServiceTest {
         OrderRequest request = OrderRequest.builder()
             .createdFrom(ZonedDateTime.now().minusDays(1))
             .createdTo(ZonedDateTime.now())
+            .orderStatus(List.of())
             .billingCountry("")
             .billingPhoneNumber("")
             .pageNo(0)
