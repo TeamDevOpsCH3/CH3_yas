@@ -1,5 +1,6 @@
 package com.yas.webhook.service;
 
+import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.times;
 import static org.mockito.Mockito.verify;
@@ -7,6 +8,7 @@ import static org.mockito.Mockito.when;
 
 import tools.jackson.databind.ObjectMapper;
 import tools.jackson.databind.node.ObjectNode;
+import com.yas.commonlibrary.exception.NotFoundException;
 import com.yas.webhook.integration.api.WebhookApi;
 import com.yas.webhook.model.Event;
 import com.yas.webhook.model.Webhook;
@@ -124,5 +126,36 @@ class OrderEventServiceTest {
         orderEventService.onOrderEvent(objectNode);
 
         verify(webhookEventNotificationRepository, times(0)).save(any(WebhookEventNotification.class));
+    }
+
+    @Test
+    void test_onOrderEvent_shouldThrowWhenEventNotFoundForCreate() {
+        ObjectMapper objectMapper = new ObjectMapper();
+
+        ObjectNode objectNode = objectMapper.createObjectNode();
+        objectNode.put("op", "c");
+        objectNode.set("after", objectMapper.createObjectNode());
+
+        when(eventRepository.findByName(EventName.ON_ORDER_CREATED)).thenReturn(java.util.Optional.empty());
+
+        assertThrows(NotFoundException.class, () -> orderEventService.onOrderEvent(objectNode));
+    }
+
+    @Test
+    void test_onOrderEvent_shouldThrowWhenEventNotFoundForStatusUpdate() {
+        ObjectMapper objectMapper = new ObjectMapper();
+
+        ObjectNode objectNode = objectMapper.createObjectNode();
+        objectNode.put("op", "u");
+        ObjectNode before = objectMapper.createObjectNode();
+        before.put("order_status", "NEW");
+        objectNode.set("before", before);
+        ObjectNode after = objectMapper.createObjectNode();
+        after.put("order_status", "PAID");
+        objectNode.set("after", after);
+
+        when(eventRepository.findByName(EventName.ON_ORDER_STATUS_UPDATED)).thenReturn(java.util.Optional.empty());
+
+        assertThrows(NotFoundException.class, () -> orderEventService.onOrderEvent(objectNode));
     }
 }
