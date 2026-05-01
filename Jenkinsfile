@@ -102,7 +102,7 @@ def runServicePipeline(service) {
                 threshold  : 70.0,
                 metric     : 'LINE',
                 baseline   : 'PROJECT',
-                criticality: 'UNSTABLE'
+                criticality: 'FAILURE'
             ]]
         )
     }
