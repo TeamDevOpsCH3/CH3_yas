@@ -127,14 +127,14 @@ class PaymentControllerTest {
                 .paymentFee(BigDecimal.ZERO)
                 .gatewayTransactionId("gw-123")
                 .paymentMethod(PaymentMethod.PAYPAL)
-                .paymentStatus(PaymentStatus.FAILED)
-                .failureMessage("Payment declined")
+                .paymentStatus(PaymentStatus.CANCELLED)
+                .failureMessage("Payment cancelled")
                 .build();
         when(paymentService.capturePayment(any(CapturePaymentRequestVm.class))).thenReturn(failedResponse);
 
         CapturePaymentResponseVm response = paymentController.capturePayment(capturePaymentRequestVm);
 
-        assertThat(response.paymentStatus()).isEqualTo(PaymentStatus.FAILED);
+        assertThat(response.paymentStatus()).isEqualTo(PaymentStatus.CANCELLED);
         assertThat(response.failureMessage()).isEqualTo("Payment declined");
     }
 }

@@ -219,8 +219,8 @@ class PaymentServiceTest {
                 .paymentFee(BigDecimal.valueOf(500))
                 .gatewayTransactionId("gatewayId")
                 .paymentMethod(PaymentMethod.BANKING)
-                .paymentStatus(PaymentStatus.FAILED)
-                .failureMessage("Payment failed")
+                .paymentStatus(PaymentStatus.CANCELLED)
+                .failureMessage("Payment cancelled")
                 .build();
         when(paymentHandler.capturePayment(capturePaymentRequestVm)).thenReturn(capturedPayment);
         when(orderService.updateCheckoutStatus(capturedPayment)).thenReturn(999L);
@@ -228,7 +228,7 @@ class PaymentServiceTest {
 
         CapturePaymentResponseVm result = paymentService.capturePayment(capturePaymentRequestVm);
 
-        assertThat(result.paymentStatus()).isEqualTo(PaymentStatus.FAILED);
+        assertThat(result.paymentStatus()).isEqualTo(PaymentStatus.CANCELLED);
         assertThat(result.failureMessage()).isEqualTo("Payment failed");
     }
 
