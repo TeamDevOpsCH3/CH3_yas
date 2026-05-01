@@ -99,4 +99,42 @@ class PaymentControllerTest {
         assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
         assertThat(response.getBody()).isEqualTo("Payment cancelled");
     }
+
+    @Test
+    void initPayment_WithNullResponse_ShouldReturnNullFields() {
+        when(paymentService.initPayment(any(InitPaymentRequestVm.class))).thenReturn(
+                InitPaymentResponseVm.builder()
+                        .status(null)
+                        .paymentId(null)
+                        .redirectUrl(null)
+                        .build()
+        );
+
+        InitPaymentResponseVm response = paymentController.initPayment(initPaymentRequestVm);
+
+        assertThat(response).isNotNull();
+        assertThat(response.status()).isNull();
+        assertThat(response.paymentId()).isNull();
+        assertThat(response.redirectUrl()).isNull();
+    }
+
+    @Test
+    void capturePayment_WithFailedStatus_ShouldReturnFailedResponse() {
+        CapturePaymentResponseVm failedResponse = CapturePaymentResponseVm.builder()
+                .orderId(1L)
+                .checkoutId("checkout-123")
+                .amount(BigDecimal.TEN)
+                .paymentFee(BigDecimal.ZERO)
+                .gatewayTransactionId("gw-123")
+                .paymentMethod(PaymentMethod.PAYPAL)
+                .paymentStatus(PaymentStatus.FAILED)
+                .failureMessage("Payment declined")
+                .build();
+        when(paymentService.capturePayment(any(CapturePaymentRequestVm.class))).thenReturn(failedResponse);
+
+        CapturePaymentResponseVm response = paymentController.capturePayment(capturePaymentRequestVm);
+
+        assertThat(response.paymentStatus()).isEqualTo(PaymentStatus.FAILED);
+        assertThat(response.failureMessage()).isEqualTo("Payment declined");
+    }
 }

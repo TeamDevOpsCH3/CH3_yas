@@ -92,4 +92,19 @@ class MediaServiceTest {
         when(requestHeadersUriSpec.retrieve()).thenReturn(responseSpec);
     }
 
+    @Test
+    public void getMedia_whenMediaIdsContainNull_shouldFilterOutNull() {
+        final String MEDIA = "http://api.yas.local/medias";
+        when(serviceUrlConfig.media()).thenReturn(MEDIA);
+        mockRestClientGetMethod(restClient);
+
+        var provider = new PaymentProvider();
+        provider.setId(PaymentMethod.COD.name());
+        provider.setMediaId(null);
+
+        var mediaVmMap = mediaService.getMediaVmMap(List.of(provider));
+
+        assertTrue(mediaVmMap.isEmpty());
+    }
+
 }

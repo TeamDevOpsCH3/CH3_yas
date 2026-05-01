@@ -208,4 +208,46 @@ class PaymentServiceTest {
         assertThat(exception.getMessage()).isEqualTo("Capture failed");
     }
 
+    @Test
+    void capturePayment_WithNullHandlerResponse_ShouldHandleGracefully() {
+        CapturePaymentRequestVm capturePaymentRequestVm = CapturePaymentRequestVm.builder()
+                .paymentMethod(PaymentMethod.PAYPAL.name()).token("123").build();
+        CapturedPayment capturedPayment = CapturedPayment.builder()
+                .orderId(2L)
+                .checkoutId("secretCheckoutId")
+                .amount(BigDecimal.valueOf(100.0))
+                .paymentFee(BigDecimal.valueOf(500))
+                .gatewayTransactionId("gatewayId")
+                .paymentMethod(PaymentMethod.BANKING)
+                .paymentStatus(PaymentStatus.FAILED)
+                .failureMessage("Payment failed")
+                .build();
+        when(paymentHandler.capturePayment(capturePaymentRequestVm)).thenReturn(capturedPayment);
+        when(orderService.updateCheckoutStatus(capturedPayment)).thenReturn(999L);
+        when(paymentRepository.save(any())).thenReturn(payment);
+
+        CapturePaymentResponseVm result = paymentService.capturePayment(capturePaymentRequestVm);
+
+        assertThat(result.paymentStatus()).isEqualTo(PaymentStatus.FAILED);
+        assertThat(result.failureMessage()).isEqualTo("Payment failed");
+    }
+
+    @Test
+    void initPayment_WithNullResponse_ShouldReturnNullFields() {
+        InitPaymentRequestVm initPaymentRequestVm = InitPaymentRequestVm.builder()
+                .paymentMethod(PaymentMethod.PAYPAL.name()).totalPrice(BigDecimal.TEN).checkoutId("123").build();
+        InitiatedPayment initiatedPayment = InitiatedPayment.builder()
+                .paymentId(null)
+                .status(null)
+                .redirectUrl(null)
+                .build();
+        when(paymentHandler.initPayment(initPaymentRequestVm)).thenReturn(initiatedPayment);
+
+        InitPaymentResponseVm result = paymentService.initPayment(initPaymentRequestVm);
+
+        assertThat(result.paymentId()).isNull();
+        assertThat(result.status()).isNull();
+        assertThat(result.redirectUrl()).isNull();
+    }
+
 }

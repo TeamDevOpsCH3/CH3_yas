@@ -19,6 +19,7 @@ import java.util.List;
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.mockito.ArgumentMatchers.any;
 import static org.mockito.Mockito.when;
+import static org.mockito.Mockito.verify;
 
 @ExtendWith(MockitoExtension.class)
 class PaymentProviderControllerTest {
@@ -81,5 +82,34 @@ class PaymentProviderControllerTest {
         assertThat(response.getBody()).isNotNull();
         assertThat(response.getBody()).hasSize(1);
         assertThat(response.getBody().get(0).getId()).isEqualTo("provider-1");
+    }
+
+    @Test
+    void getAll_ReturnEmptyList() {
+        when(paymentProviderService.getEnabledPaymentProviders(any(Pageable.class))).thenReturn(List.of());
+
+        ResponseEntity<List<PaymentProviderVm>> response = paymentProviderController.getAll(Pageable.ofSize(10));
+
+        assertThat(response.getStatusCode()).isEqualTo(HttpStatus.OK);
+        assertThat(response.getBody()).isNotNull();
+        assertThat(response.getBody()).isEmpty();
+    }
+
+    @Test
+    void create_CallServiceWithCorrectParameter() {
+        when(paymentProviderService.create(any(CreatePaymentVm.class))).thenReturn(paymentProviderVm);
+
+        paymentProviderController.create(createPaymentVm);
+
+        verify(paymentProviderService).create(createPaymentVm);
+    }
+
+    @Test
+    void update_CallServiceWithCorrectParameter() {
+        when(paymentProviderService.update(any(UpdatePaymentVm.class))).thenReturn(paymentProviderVm);
+
+        paymentProviderController.update(updatePaymentVm);
+
+        verify(paymentProviderService).update(updatePaymentVm);
     }
 }
