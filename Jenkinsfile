@@ -100,7 +100,7 @@ def runServicePipeline(service) {
             // UNSTABLE = yellow badge, team can still see reports and decide next step
             qualityGates: [[
                 threshold  : 70.0,
-                metric     : 'LINE',
+                metric     : 'INSTRUCTION',
                 baseline   : 'PROJECT',
                 criticality: 'FAILURE'
             ]]
