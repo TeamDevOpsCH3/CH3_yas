@@ -1,15 +1,3 @@
-/*
-how to add new service/stage:
-template: [
-    id: 'service-name',                                             // folder name (e.g., 'payment')
-    display: 'Service Display Name',                                // Jenkins UI name (e.g., 'Payment Service')
-    enableTest: true,                                               // set true to run mvn test + publish JUnit XML
-    enableCoverage: true,                                           // set true to generate + publish JaCoCo report
-    commands: [                                                     // extra stages to run for this service
-        [name: 'Stage Name', command: 'your shell command here'],
-    ]
-]
-*/ 
 
 
 def microservices = [
@@ -91,8 +79,6 @@ def runServicePipeline(service) {
             id              : "jacoco-${serviceId}",
             name            : "JaCoCo - ${serviceDisplay}",
             ignoreParsingErrors: true,
-            // Coverage Gate: mark build UNSTABLE (not FAILURE) when line coverage < 70%
-            // UNSTABLE = yellow badge, team can still see reports and decide next step
             qualityGates: [[
                 threshold  : 70.0,
                 metric     : 'INSTRUCTION',
@@ -101,25 +87,6 @@ def runServicePipeline(service) {
             ]]
         )
     }
-
-    // ------------------------------------------------------------------ //
-    // Stage SonarCloud Scan                                               //
-    // ------------------------------------------------------------------ //
-    // stage("${serviceDisplay} - SonarCloud Scan") {
-    //     withCredentials([string(credentialsId: 'SONAR_TOKEN', variable: 'SONAR_TOKEN')]) {
-    //         sh """
-    //             mvn sonar:sonar \
-    //             -pl ${serviceId} \
-    //             -DskipTests \
-    //             -Dsonar.projectKey=TeamDevOpsCH3_CH3_yas_${serviceId} \
-    //             -Dsonar.organization=teamdevopsch3 \
-    //             -Dsonar.host.url=https://sonarcloud.io \
-    //             -Dsonar.login=\$SONAR_TOKEN \
-    //             -Dsonar.coverage.jacoco.xmlReportPaths=${serviceId}/target/site/jacoco/jacoco.xml \
-    //             -B --no-transfer-progress
-    //         """
-    //     }
-    // }
 
     if (enableBuild) {
         stage("${serviceDisplay} - Build") {
@@ -132,7 +99,6 @@ def runServicePipeline(service) {
         )
     }
 
-    // Extra ad-hoc stages defined per-service
     commands.each { cmd ->
         stage("${serviceDisplay} - ${cmd.name}") {
             if (cmd.command) {
@@ -156,18 +122,14 @@ pipeline {
     
     tools {
         maven 'maven-3.9'
-        // pom.xml requires Java 25 (maven.compiler.source=25).
-        // Without this, Jenkins uses the system JDK which may be older → "release version 25 not supported"
         jdk 'jdk-25'
     }
 
     environment {
-        // Fix JENKINS-48300: suppress false-positive "wrapper script not touching log" warning
-        // that appears when Maven compiles silently for a long time with no stdout output.
         JAVA_TOOL_OPTIONS = '-Dorg.jenkinsci.plugins.durabletask.BourneShellScript.HEARTBEAT_CHECK_INTERVAL=86400'
 
         // Cap Maven heap to 512m per process.
-        // Running 14 services in parallel with -Xmx1024m each = ~14GB RAM → OOM.
+        // Running 18 services in parallel with -Xmx1024m each = ~18GB RAM → OOM.
         // Sequential execution + 512m is safe on most CI servers.
         MAVEN_OPTS = '-Xmx512m'
 
@@ -197,19 +159,11 @@ pipeline {
         )
     }
 
-    // triggers {
-    //     githubPush()
-    // }
-
     stages {
         stage('Gitleaks Security Scan') {
             steps {
                 script {
                     echo "Running Gitleaks security scan on the entire codebase..."
-                    /*
-                    Scan whole repository for leaked secrets.
-                    --exit-code=0 prevents the build from failing when leaks are detected.
-                    */
                     catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE', message: 'Gitleaks scan failed: potential secrets detected. Check the logs for details.') {
                         echo "Running Gitleaks security scan on the entire codebase..."
                         sh "gitleaks detect --source=. --config=gitleaks.toml --verbose --no-banner"
@@ -290,7 +244,6 @@ pipeline {
 
         // ---------------------------------------------------------------- //
         // Stage 3: Snyk scan ONCE for entire project (not per service)     //
-        // [FIX OOM] Scanning per-service = 19x Snyk processes → crash      //
         // Only runs when ENABLE_SNYK_SCAN = true (manual trigger)          //
         // ---------------------------------------------------------------- //
         stage('Snyk Security Scan') {
@@ -298,9 +251,7 @@ pipeline {
                 allOf {
                     expression { params.ENABLE_SNYK_SCAN == true }
                     anyOf {
-                        // Lần đầu / manual force
                         expression { params.FORCE_RUN_ALL == true }
-                        // Chỉ chạy lại khi có pom.xml thay đổi
                         expression {
                             def changedPaths = collectChangedPaths()
                             changedPaths.isEmpty() ||   // no SCM context = first run
