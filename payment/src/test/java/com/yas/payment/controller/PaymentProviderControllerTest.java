@@ -45,10 +45,7 @@ class PaymentProviderControllerTest {
         updatePaymentVm.setName("Updated Provider");
         updatePaymentVm.setEnabled(true);
 
-        paymentProviderVm = new PaymentProviderVm();
-        paymentProviderVm.setId("provider-1");
-        paymentProviderVm.setName("Test Provider");
-        paymentProviderVm.setEnabled(true);
+        paymentProviderVm = new PaymentProviderVm("provider-1", "Test Provider", "http://config.url", 1, null, null);
     }
 
     @Test
