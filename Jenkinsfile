@@ -250,11 +250,17 @@ pipeline {
                     echo "Jenkinsfile changed: ${pipelineChanged}"
                     echo "No SCM context: ${noScmContext}"
 
+                    def globalConfigChanged = changedPaths.any { 
+                        it.startsWith('common-library/') || 
+                        it.startsWith('docker/') || 
+                        it.contains('docker-compose.yml') 
+                    }
+
                     // Build list of services that need to run
                     env.SERVICES_TO_RUN = microservices
                         .findAll { service ->
                             def serviceChanged = changedPaths.any { it.startsWith(service.id + '/') }
-                            params.FORCE_RUN_ALL || noScmContext || pomChanged || pipelineChanged || serviceChanged
+                            params.FORCE_RUN_ALL || noScmContext || pomChanged || pipelineChanged || globalConfigChanged || serviceChanged
                         }
                         .collect { it.display }
                         .join(',')
