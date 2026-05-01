@@ -135,6 +135,6 @@ class PaymentControllerTest {
         CapturePaymentResponseVm response = paymentController.capturePayment(capturePaymentRequestVm);
 
         assertThat(response.paymentStatus()).isEqualTo(PaymentStatus.CANCELLED);
-        assertThat(response.failureMessage()).isEqualTo("Payment declined");
+        assertThat(response.failureMessage()).isEqualTo("Payment cancelled");
     }
 }

@@ -229,7 +229,7 @@ class PaymentServiceTest {
         CapturePaymentResponseVm result = paymentService.capturePayment(capturePaymentRequestVm);
 
         assertThat(result.paymentStatus()).isEqualTo(PaymentStatus.CANCELLED);
-        assertThat(result.failureMessage()).isEqualTo("Payment failed");
+        assertThat(result.failureMessage()).isEqualTo("Payment cancelled");
     }
 
     @Test
