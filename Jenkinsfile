@@ -60,7 +60,7 @@ def runServicePipeline(service) {
     // Stage Coverage: jacoco:report -> HTML + XML, publish to Jenkins     //
     // ------------------------------------------------------------------ //
     if (enableCoverage) {
-        stage("$Coverage") {
+        stage("Coverage") {
             sh "mvn jacoco:report -pl ${serviceId} -DskipTests -B --no-transfer-progress"
         }
         publishHTML(target: [
