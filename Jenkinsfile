@@ -115,8 +115,8 @@ pipeline {
 
     options {
         buildDiscarder(logRotator(
-            numToKeepStr: '1',
-            artifactNumToKeepStr: '1'
+            numToKeepStr: '5',
+            artifactNumToKeepStr: '2'
         ))
         disableConcurrentBuilds()
     }
@@ -162,7 +162,7 @@ pipeline {
 
     stages {
         stage('Gitleaks Security Scan') {
-            agent { label 'build-agent' }
+            agent { label 'built-in' }
             steps {
                 script {
                     catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE', message: 'Gitleaks scan failed: potential secrets detected. Check the logs for details.') {
@@ -177,7 +177,7 @@ pipeline {
         // Stage 1: Detect which services have changed (fast, no Maven)     //
         // ---------------------------------------------------------------- //
         stage('Detect Changes') {
-            agent { label 'build-agent' }
+            agent { label 'built-in' }
             steps {
                 script {
                     def changedPaths = collectChangedPaths()
@@ -234,10 +234,14 @@ pipeline {
                             def s = service
                             parallelStages[service.display] = {
                                 node('build-agent') {
-                                    checkout scm
-                                    echo ">>> Parallel Task: ${service.display}"
-                                    timeout(time: 45, unit: 'MINUTES') {
-                                        runServicePipeline(service)
+                                    try {
+                                        checkout scm
+                                        echo ">>> Parallel Task: ${s.display}"
+                                        timeout(time: 45, unit: 'MINUTES') {
+                                            runServicePipeline(s)
+                                        }
+                                    } finally {
+                                        cleanWs() 
                                     }
                                 }
                             }
