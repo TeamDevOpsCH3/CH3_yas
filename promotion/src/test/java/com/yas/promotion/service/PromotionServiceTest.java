@@ -38,6 +38,7 @@ import org.mockito.ArgumentMatchers;
 import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.security.core.context.SecurityContextImpl;
 import org.springframework.security.oauth2.jwt.Jwt;
 import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
@@ -421,11 +422,14 @@ class PromotionServiceTest {
 
     @Test
     void updateUsagePromotion_ThenSuccess() {
-        Jwt jwt = Mockito.mock(Jwt.class);
-        Mockito.when(jwt.getSubject()).thenReturn("user-test");
+        Jwt jwt = Jwt.withTokenValue("test-token")
+            .header("alg", "none")
+            .claim("sub", "user-test")
+            .build();
         JwtAuthenticationToken jwtAuth = new JwtAuthenticationToken(jwt, List.of());
-        org.springframework.security.core.context.SecurityContextHolder
-            .getContext().setAuthentication(jwtAuth);
+        SecurityContextImpl context = new SecurityContextImpl();
+        context.setAuthentication(jwtAuth);
+        org.springframework.security.core.context.SecurityContextHolder.setContext(context);
 
         List<PromotionUsageVm> usageVms = List.of(
             new PromotionUsageVm("code1", 1L, "user-test", 200L)
