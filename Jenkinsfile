@@ -234,14 +234,23 @@ pipeline {
                             def s = service
                             parallelStages[service.display] = {
                                 node('build-agent') {
-                                    try {
-                                        checkout scm
-                                        echo ">>> Parallel Task: ${s.display}"
-                                        timeout(time: 45, unit: 'MINUTES') {
-                                            runServicePipeline(s)
+                                    def mvnHome = tool 'maven-3.9'
+                                    def jdkHome = tool 'jdk-25'
+                                    
+                                    withEnv([
+                                        "PATH+MAVEN=${mvnHome}/bin",
+                                        "JAVA_HOME=${jdkHome}",
+                                        "PATH+JDK=${jdkHome}/bin"
+                                    ]) {
+                                        try {
+                                            checkout scm
+                                            echo ">>> Parallel Task: ${s.display}"
+                                            timeout(time: 45, unit: 'MINUTES') {
+                                                runServicePipeline(s)
+                                            }
+                                        } finally {
+                                            cleanWs() 
                                         }
-                                    } finally {
-                                        cleanWs() 
                                     }
                                 }
                             }
