@@ -111,13 +111,14 @@ def runServicePipeline(service) {
 }
 
 pipeline {
-    agent any
+    agent { label 'build-agent' }
 
     options {
         buildDiscarder(logRotator(
             numToKeepStr: '1',
             artifactNumToKeepStr: '1'
         ))
+        disableConcurrentBuilds()
     }
     
     tools {
@@ -131,7 +132,7 @@ pipeline {
         // Cap Maven heap to 512m per process.
         // Running 18 services in parallel with -Xmx1024m each = ~18GB RAM → OOM.
         // Sequential execution + 512m is safe on most CI servers.
-        MAVEN_OPTS = '-Xmx512m'
+        MAVEN_OPTS = '-Xmx512m -XX:MaxMetaspaceSize=256m -XX:+UseG1GC -Djava.awt.headless=true'
 
         SONAR_TOKEN = credentials('SONAR_TOKEN')
     }
@@ -224,19 +225,22 @@ pipeline {
                         return
                     }
 
+                    def parallelStages = [:]
+
                     microservices.each { service ->
-                        if (!servicesToRun.contains(service.display)) return
-
-                        echo '========================================'
-                        echo "Running pipeline for: ${service.display}"
-                        echo '========================================'
-
-                        // Wrap each service in a timeout to prevent one stuck
-                        // Maven process from hanging the entire build forever
-                        timeout(time: 45, unit: 'MINUTES') {
-                            runServicePipeline(service)
+                        if (servicesToRun.contains(service.display)) {
+                            parallelStages[service.display] = {
+                                node('build-agent') {
+                                    echo ">>> Parallel Task: ${service.display}"
+                                    timeout(time: 45, unit: 'MINUTES') {
+                                        runServicePipeline(service)
+                                    }
+                                }
+                            }
                         }
                     }
+
+                    parallel parallelStages
                 }
             }
         }
