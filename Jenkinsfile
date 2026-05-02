@@ -129,9 +129,6 @@ pipeline {
     environment {
         JAVA_TOOL_OPTIONS = '-Dorg.jenkinsci.plugins.durabletask.BourneShellScript.HEARTBEAT_CHECK_INTERVAL=86400'
 
-        // Cap Maven heap to 512m per process.
-        // Running 18 services in parallel with -Xmx1024m each = ~18GB RAM → OOM.
-        // Sequential execution + 512m is safe on most CI servers.
         MAVEN_OPTS = '-Xmx512m -XX:MaxMetaspaceSize=256m -XX:+UseG1GC -Djava.awt.headless=true'
 
         SONAR_TOKEN = credentials('SONAR_TOKEN')
