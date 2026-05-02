@@ -280,7 +280,7 @@ pipeline {
                     }
                 }
             }
-            agent { label 'build-in' }
+            agent { label 'built-in' }
             steps {
                 snykSecurity(
                     snykInstallation: 'snyk-cli',
@@ -294,7 +294,7 @@ pipeline {
         }
 
         stage('SonarCloud Scan') {
-            agent { label 'build-in' }
+            agent { label 'built-in' }
             steps {
                 script {
                     def servicesToRun = env.SERVICES_TO_RUN
