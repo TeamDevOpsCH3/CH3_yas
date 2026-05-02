@@ -163,7 +163,6 @@ pipeline {
         stage('Gitleaks Security Scan') {
             steps {
                 script {
-                    echo "Running Gitleaks security scan on the entire codebase..."
                     catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE', message: 'Gitleaks scan failed: potential secrets detected. Check the logs for details.') {
                         echo "Running Gitleaks security scan on the entire codebase..."
                         sh "gitleaks detect --source=. --config=gitleaks.toml --verbose --no-banner"
