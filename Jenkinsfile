@@ -231,6 +231,7 @@ pipeline {
                         if (servicesToRun.contains(service.display)) {
                             parallelStages[service.display] = {
                                 node('build-agent') {
+                                    checkout scm
                                     echo ">>> Parallel Task: ${service.display}"
                                     timeout(time: 45, unit: 'MINUTES') {
                                         runServicePipeline(service)
