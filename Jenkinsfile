@@ -111,7 +111,7 @@ def runServicePipeline(service) {
 }
 
 pipeline {
-    agent { label 'build-agent' }
+    agent none
 
     options {
         buildDiscarder(logRotator(
@@ -162,6 +162,7 @@ pipeline {
 
     stages {
         stage('Gitleaks Security Scan') {
+            agent { label 'build-agent' }
             steps {
                 script {
                     catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE', message: 'Gitleaks scan failed: potential secrets detected. Check the logs for details.') {
@@ -176,6 +177,7 @@ pipeline {
         // Stage 1: Detect which services have changed (fast, no Maven)     //
         // ---------------------------------------------------------------- //
         stage('Detect Changes') {
+            agent { label 'build-agent' }
             steps {
                 script {
                     def changedPaths = collectChangedPaths()
@@ -229,6 +231,7 @@ pipeline {
 
                     microservices.each { service ->
                         if (servicesToRun.contains(service.display)) {
+                            def s = service
                             parallelStages[service.display] = {
                                 node('build-agent') {
                                     checkout scm
@@ -264,6 +267,7 @@ pipeline {
                     }
                 }
             }
+            agent { label 'build-agent' }
             steps {
                 snykSecurity(
                     snykInstallation: 'snyk-cli',
@@ -277,6 +281,7 @@ pipeline {
         }
 
         stage('SonarCloud Scan') {
+            agent { label 'build-agent' }
             steps {
                 script {
                     def servicesToRun = env.SERVICES_TO_RUN
