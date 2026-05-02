@@ -47,7 +47,7 @@ def runServicePipeline(service) {
     // Stage Test: mvn test (unit tests only) + publish JUnit XML          //
     // ------------------------------------------------------------------ //
     if (enableTest) {
-        stage("Test") {
+        stage("${serviceDisplay}: Test") {
             sh "mvn test -pl ${serviceId} -am -DskipITs -Dsurefire.excludes='**/it/**,**/*IT.java,**/*ITCase.java,**/*IT*.java,**/ProductCdcConsumerTest.java,**/ApplicationTest.java' -B --no-transfer-progress"
         }
         junit(
@@ -60,7 +60,7 @@ def runServicePipeline(service) {
     // Stage Coverage: jacoco:report -> HTML + XML, publish to Jenkins     //
     // ------------------------------------------------------------------ //
     if (enableCoverage) {
-        stage("Coverage") {
+        stage("${serviceDisplay}: Coverage") {
             sh "mvn jacoco:report -pl ${serviceId} -DskipTests -B --no-transfer-progress"
         }
         publishHTML(target: [
@@ -89,7 +89,7 @@ def runServicePipeline(service) {
     }
 
     if (enableBuild) {
-        stage("Build") {
+        stage("${serviceDisplay}: Build") {
             sh "mvn package -pl ${serviceId} -am -DskipTests -B --no-transfer-progress"
         }
         archiveArtifacts(
