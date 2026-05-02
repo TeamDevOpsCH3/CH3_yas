@@ -40,4 +40,14 @@ class EventServiceTest {
         assertNotNull(eventVms);
         assertEquals(1, eventVms.size());
     }
+
+    @Test
+    void test_findAllEvents_whenNoEvents_thenReturnEmptyList() {
+        when(eventRepository.findAll(Sort.by(Sort.Direction.DESC, "id")))
+            .thenReturn(List.of());
+
+        List<EventVm> eventVms = eventService.findAllEvents();
+        assertNotNull(eventVms);
+        assertEquals(0, eventVms.size());
+    }
 }

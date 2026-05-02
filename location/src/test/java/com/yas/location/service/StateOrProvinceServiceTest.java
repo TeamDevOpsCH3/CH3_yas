@@ -17,11 +17,13 @@ import com.yas.location.viewmodel.stateorprovince.StateOrProvincePostVm;
 import com.yas.location.viewmodel.stateorprovince.StateOrProvinceVm;
 import java.util.List;
 import org.junit.jupiter.api.AfterEach;
+import org.junit.jupiter.api.Tag;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
 
 @SpringBootTest(classes = LocationApplication.class)
+@Tag("spring")
 public class StateOrProvinceServiceTest {
 
     @Autowired

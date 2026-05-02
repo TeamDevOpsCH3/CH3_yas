@@ -1,5 +1,6 @@
 package com.yas.promotion.service;
 
+import static org.junit.jupiter.api.Assertions.assertDoesNotThrow;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertThrows;
 
@@ -9,15 +10,21 @@ import com.yas.commonlibrary.exception.NotFoundException;
 import com.yas.promotion.PromotionApplication;
 import com.yas.promotion.model.Promotion;
 import com.yas.promotion.model.PromotionApply;
+import com.yas.promotion.model.PromotionUsage;
 import com.yas.promotion.model.enumeration.ApplyTo;
 import com.yas.promotion.model.enumeration.DiscountType;
 import com.yas.promotion.model.enumeration.UsageType;
 import com.yas.promotion.repository.PromotionRepository;
+import com.yas.promotion.repository.PromotionUsageRepository;
 import com.yas.promotion.utils.Constants;
+import com.yas.promotion.viewmodel.BrandVm;
+import com.yas.promotion.viewmodel.CategoryGetVm;
 import com.yas.promotion.viewmodel.ProductVm;
 import com.yas.promotion.viewmodel.PromotionDetailVm;
 import com.yas.promotion.viewmodel.PromotionListVm;
 import com.yas.promotion.viewmodel.PromotionPostVm;
+import com.yas.promotion.viewmodel.PromotionPutVm;
+import com.yas.promotion.viewmodel.PromotionUsageVm;
 import com.yas.promotion.viewmodel.PromotionVerifyVm;
 import java.time.Instant;
 import java.time.ZonedDateTime;
@@ -31,12 +38,17 @@ import org.mockito.ArgumentMatchers;
 import org.mockito.Mockito;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.security.core.context.SecurityContextImpl;
+import org.springframework.security.oauth2.jwt.Jwt;
+import org.springframework.security.oauth2.server.resource.authentication.JwtAuthenticationToken;
 import org.springframework.test.context.bean.override.mockito.MockitoBean;
 
 @SpringBootTest(classes = PromotionApplication.class)
 class PromotionServiceTest {
     @Autowired
     private PromotionRepository promotionRepository;
+    @Autowired
+    private PromotionUsageRepository promotionUsageRepository;
     @MockitoBean
     private ProductService productService;
     @Autowired
@@ -135,6 +147,7 @@ class PromotionServiceTest {
 
     @AfterEach
     void tearDown() {
+        promotionUsageRepository.deleteAll();
         promotionRepository.deleteAll();
     }
 
@@ -331,6 +344,161 @@ class PromotionServiceTest {
         assertEquals(1L, result.productId());
         assertEquals(DiscountType.FIXED, result.discountType());
         assertEquals(200L, result.discountValue().longValue());
+    }
+
+    // ---- updatePromotion ----
+
+    @Test
+    void updatePromotion_ThenSuccess() {
+        PromotionPutVm putVm = PromotionPutVm.builder()
+            .id(promotion1.getId())
+            .name("Updated Name")
+            .slug("promotion-1-updated")
+            .couponCode("code1-updated")
+            .description("Updated desc")
+            .applyTo(ApplyTo.BRAND)
+            .discountType(DiscountType.PERCENTAGE)
+            .discountPercentage(15L)
+            .discountAmount(0L)
+            .isActive(true)
+            .startDate(Date.from(Instant.now()))
+            .endDate(Date.from(Instant.now().plus(10, ChronoUnit.DAYS)))
+            .minimumOrderPurchaseAmount(0L)
+            .usageType(UsageType.UNLIMITED)
+            .brandIds(List.of(1L))
+            .build();
+
+        PromotionDetailVm result = promotionService.updatePromotion(putVm);
+        assertEquals("Updated Name", result.name());
+        assertEquals("promotion-1-updated", result.slug());
+        assertEquals(15L, result.discountPercentage());
+    }
+
+    @Test
+    void updatePromotion_WhenNotFound_ThenNotFoundExceptionThrown() {
+        PromotionPutVm putVm = PromotionPutVm.builder()
+            .id(9999L)
+            .name("X")
+            .slug("x")
+            .couponCode("cx")
+            .applyTo(ApplyTo.PRODUCT)
+            .discountType(DiscountType.FIXED)
+            .discountAmount(100L)
+            .isActive(false)
+            .startDate(Date.from(Instant.now()))
+            .endDate(Date.from(Instant.now().plus(1, ChronoUnit.DAYS)))
+            .minimumOrderPurchaseAmount(0L)
+            .usageType(UsageType.UNLIMITED)
+            .productIds(List.of(1L))
+            .build();
+
+        assertThrows(NotFoundException.class, () -> promotionService.updatePromotion(putVm));
+    }
+
+    // ---- deletePromotion ----
+
+    @Test
+    void deletePromotion_ThenSuccess() {
+        assertDoesNotThrow(() -> promotionService.deletePromotion(promotion1.getId()));
+    }
+
+    @Test
+    void deletePromotion_WhenInUse_ThenBadRequestExceptionThrown() {
+        PromotionUsage usage = PromotionUsage.builder()
+            .promotion(promotion1)
+            .userId("user-1")
+            .productId(1L)
+            .orderId(100L)
+            .build();
+        promotionUsageRepository.save(usage);
+
+        assertThrows(BadRequestException.class,
+            () -> promotionService.deletePromotion(promotion1.getId()));
+
+        promotionUsageRepository.deleteAll();
+    }
+
+    // ---- updateUsagePromotion ----
+
+    @Test
+    void updateUsagePromotion_ThenSuccess() {
+        Jwt jwt = Jwt.withTokenValue("test-token")
+            .header("alg", "none")
+            .claim("sub", "user-test")
+            .build();
+        JwtAuthenticationToken jwtAuth = new JwtAuthenticationToken(jwt, List.of());
+        SecurityContextImpl context = new SecurityContextImpl();
+        context.setAuthentication(jwtAuth);
+        org.springframework.security.core.context.SecurityContextHolder.setContext(context);
+
+        List<PromotionUsageVm> usageVms = List.of(
+            new PromotionUsageVm("code1", 1L, "user-test", 200L)
+        );
+        assertDoesNotThrow(() -> promotionService.updateUsagePromotion(usageVms));
+
+        org.springframework.security.core.context.SecurityContextHolder.clearContext();
+    }
+
+    @Test
+    void updateUsagePromotion_WhenPromotionNotFound_ThenNotFoundExceptionThrown() {
+        List<PromotionUsageVm> usageVms = List.of(
+            new PromotionUsageVm("INVALID_CODE", 1L, "user-test", 200L)
+        );
+        assertThrows(NotFoundException.class, () -> promotionService.updateUsagePromotion(usageVms));
+    }
+
+    // ---- getPromotion with different applyTo ----
+
+    @Test
+    void getPromotion_ApplyToProduct_ThenSuccess() {
+        Promotion productPromotion = Promotion.builder()
+            .name("Product Promo")
+            .slug("product-promo")
+            .couponCode("code-get-prod-unique")
+            .discountType(DiscountType.FIXED)
+            .discountAmount(50L)
+            .isActive(true)
+            .startDate(Instant.now())
+            .endDate(Instant.now().plus(10, ChronoUnit.DAYS))
+            .applyTo(ApplyTo.PRODUCT)
+            .minimumOrderPurchaseAmount(0L)
+            .build();
+        var apply = PromotionApply.builder().promotion(productPromotion).productId(1L).build();
+        productPromotion.setPromotionApplies(List.of(apply));
+        productPromotion = promotionRepository.save(productPromotion);
+
+        Mockito.when(productService.getProductByIds(ArgumentMatchers.anyList()))
+            .thenReturn(createProductVms());
+
+        PromotionDetailVm result = promotionService.getPromotion(productPromotion.getId());
+        assertEquals("product-promo", result.slug());
+        assertEquals(ApplyTo.PRODUCT, result.applyTo());
+    }
+
+    @Test
+    void getPromotion_ApplyToCategory_ThenSuccess() {
+        Promotion categoryPromotion = Promotion.builder()
+            .name("Category Promo")
+            .slug("category-promo")
+            .couponCode("code-get-cat-unique")
+            .discountType(DiscountType.PERCENTAGE)
+            .discountPercentage(5L)
+            .isActive(true)
+            .startDate(Instant.now())
+            .endDate(Instant.now().plus(10, ChronoUnit.DAYS))
+            .applyTo(ApplyTo.CATEGORY)
+            .minimumOrderPurchaseAmount(0L)
+            .build();
+        var apply = PromotionApply.builder().promotion(categoryPromotion).categoryId(10L).build();
+        categoryPromotion.setPromotionApplies(List.of(apply));
+        categoryPromotion = promotionRepository.save(categoryPromotion);
+
+        Mockito.when(productService.getCategoryByIds(ArgumentMatchers.anyList()))
+            .thenReturn(List.of());
+
+        PromotionDetailVm result = promotionService.getPromotion(categoryPromotion.getId());
+        assertEquals("category-promo", result.slug());
+        assertEquals(ApplyTo.CATEGORY, result.applyTo());
     }
 
     private List<ProductVm> createProductVms() {

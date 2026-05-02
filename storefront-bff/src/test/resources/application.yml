@@ -1,0 +1,25 @@
+spring:
+  session:
+    store-type: none
+  data:
+    redis:
+      host: localhost
+      port: 6379
+  security:
+    oauth2:
+      client:
+        registration:
+          keycloak:
+            client-id: test-client
+            client-secret: test-secret
+            authorization-grant-type: authorization_code
+            redirect-uri: http://localhost/login/oauth2/code/keycloak
+            scope: openid, profile, email
+        provider:
+          keycloak:
+            issuer-uri: http://localhost/dummy/realms/Yas
+            authorization-uri: http://localhost/dummy/realms/Yas/protocol/openid-connect/auth
+            token-uri: http://localhost/dummy/realms/Yas/protocol/openid-connect/token
+            user-info-uri: http://localhost/dummy/realms/Yas/protocol/openid-connect/userinfo
+            jwk-set-uri: http://localhost/dummy/realms/Yas/protocol/openid-connect/certs
+            user-name-attribute: preferred_username
