@@ -239,23 +239,25 @@ pipeline {
                         if (servicesToRun.contains(service.display)) {
                             def s = service
                             parallelStages[service.display] = {
-                                node('build-agent') {
-                                    def mvnHome = tool 'maven-3.9'
-                                    def jdkHome = tool 'jdk-25'
-                                    
-                                    withEnv([
-                                        "PATH+MAVEN=${mvnHome}/bin",
-                                        "JAVA_HOME=${jdkHome}",
-                                        "PATH+JDK=${jdkHome}/bin"
-                                    ]) {
-                                        try {
-                                            checkout scm
-                                            echo ">>> Parallel Task: ${s.display}"
-                                            timeout(time: 45, unit: 'MINUTES') {
-                                                runServicePipeline(s)
+                                throttle(['ci-services']) {
+                                    node('build-agent') {
+                                        def mvnHome = tool 'maven-3.9'
+                                        def jdkHome = tool 'jdk-25'
+
+                                        withEnv([
+                                            "PATH+MAVEN=${mvnHome}/bin",
+                                            "JAVA_HOME=${jdkHome}",
+                                            "PATH+JDK=${jdkHome}/bin"
+                                        ]) {
+                                            try {
+                                                checkout scm
+                                                echo ">>> Parallel Task: ${s.display}"
+                                                timeout(time: 45, unit: 'MINUTES') {
+                                                    runServicePipeline(s)
+                                                }
+                                            } finally {
+                                                cleanWs()
                                             }
-                                        } finally {
-                                            cleanWs() 
                                         }
                                     }
                                 }
