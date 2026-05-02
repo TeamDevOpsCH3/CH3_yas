@@ -167,7 +167,13 @@ pipeline {
                 script {
                     catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE', message: 'Gitleaks scan failed: potential secrets detected. Check the logs for details.') {
                         echo "Running Gitleaks security scan on the entire codebase..."
-                        sh "gitleaks detect --source=. --config=gitleaks.toml --verbose --no-banner"
+                        def status = sh(
+                            script: "gitleaks detect --source=. --config=gitleaks.toml --verbose --no-banner",
+                            returnStatus: true
+                        )
+                        if (status != 0) {
+                            error("Gitleaks detected potential secrets (exit code ${status}).")
+                        }
                     }
                 }
             }
