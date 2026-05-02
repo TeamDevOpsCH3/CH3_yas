@@ -37,6 +37,7 @@ def collectChangedPaths() {
 
 def runServicePipeline(service) {
     def serviceId      = service.id
+    def serviceDisplay = service.display
     def enableTest     = service.enableTest     ?: false
     def enableCoverage = service.enableCoverage ?: false
     def enableBuild    = service.enableBuild    ?: false
@@ -46,7 +47,7 @@ def runServicePipeline(service) {
     // Stage Test: mvn test (unit tests only) + publish JUnit XML          //
     // ------------------------------------------------------------------ //
     if (enableTest) {
-        stage("${serviceId} - Test") {
+        stage("Test") {
             sh "mvn test -pl ${serviceId} -am -DskipITs -Dsurefire.excludes='**/it/**,**/*IT.java,**/*ITCase.java,**/*IT*.java,**/ProductCdcConsumerTest.java,**/ApplicationTest.java' -B --no-transfer-progress"
         }
         junit(
@@ -59,7 +60,7 @@ def runServicePipeline(service) {
     // Stage Coverage: jacoco:report -> HTML + XML, publish to Jenkins     //
     // ------------------------------------------------------------------ //
     if (enableCoverage) {
-        stage("${serviceId} - Coverage") {
+        stage("$Coverage") {
             sh "mvn jacoco:report -pl ${serviceId} -DskipTests -B --no-transfer-progress"
         }
         publishHTML(target: [
@@ -88,7 +89,7 @@ def runServicePipeline(service) {
     }
 
     if (enableBuild) {
-        stage("${serviceId} - Build") {
+        stage("Build") {
             sh "mvn package -pl ${serviceId} -am -DskipTests -B --no-transfer-progress"
         }
         archiveArtifacts(
