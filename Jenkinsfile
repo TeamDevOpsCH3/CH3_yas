@@ -155,6 +155,11 @@ pipeline {
             defaultValue: 'dockerhub-creds',
             description : 'Jenkins username/password credentials ID for Docker registry login'
         )
+        string(
+            name        : 'DOCKER_BUILDX_BUILDER',
+            defaultValue: 'yas-builder',
+            description : 'Docker Buildx builder name used on Jenkins build agents'
+        )
         booleanParam(
             name        : 'FORCE_RUN_ALL',
             defaultValue: false,
@@ -315,12 +320,14 @@ pipeline {
                     def registry = params.DOCKER_REGISTRY.trim()
                     def namespace = params.DOCKER_IMAGE_NAMESPACE.trim()
                     def imagePrefix = params.DOCKER_IMAGE_PREFIX.trim()
+                    def buildxBuilder = params.DOCKER_BUILDX_BUILDER.trim()
 
                     withEnv([
                         "PATH+MAVEN=${mvnHome}/bin",
                         "JAVA_HOME=${jdkHome}",
                         "PATH+JDK=${jdkHome}/bin",
-                        "DOCKER_REGISTRY_VALUE=${registry}"
+                        "DOCKER_REGISTRY_VALUE=${registry}",
+                        "DOCKER_BUILDX_BUILDER_VALUE=${buildxBuilder}"
                     ]) {
                         withCredentials([usernamePassword(
                             credentialsId: params.DOCKER_CREDENTIALS_ID,
@@ -332,6 +339,26 @@ pipeline {
                                 printf '%s' "${DOCKER_PASSWORD}" | docker login "${DOCKER_REGISTRY_VALUE}" -u "${DOCKER_USERNAME}" --password-stdin
                                 set -x
                             '''
+                            sh '''
+                                if ! docker buildx version >/dev/null 2>&1; then
+                                    echo 'Docker Buildx is not available on this Jenkins agent.'
+                                    echo 'Install/enable the docker-buildx plugin on Build-Agent-CH3, then rerun this pipeline.'
+                                    exit 1
+                                fi
+
+                                if ! docker buildx build --help | grep -q -- '--push'; then
+                                    echo 'Docker Buildx on this Jenkins agent does not support --push.'
+                                    echo 'Update Docker/buildx on Build-Agent-CH3, then rerun this pipeline.'
+                                    exit 1
+                                fi
+
+                                if ! docker buildx inspect "${DOCKER_BUILDX_BUILDER_VALUE}" >/dev/null 2>&1; then
+                                    docker buildx create --name "${DOCKER_BUILDX_BUILDER_VALUE}" --use
+                                fi
+
+                                docker buildx use "${DOCKER_BUILDX_BUILDER_VALUE}"
+                                docker buildx inspect --bootstrap
+                            '''
 
                             servicesToBuild.each { service ->
                                 def imageRepository = [registry, namespace, "${imagePrefix}${service.id}"]
@@ -340,13 +367,13 @@ pipeline {
                                 def imageName = "${imageRepository}:${commitTag}"
 
                                 stage("${service.display}: Build & Push Image") {
-                                    echo "Building image ${imageName}"
+                                    echo "Building and pushing image for ${service.display} with tag ${commitTag}"
                                     withEnv([
                                         "SERVICE_ID=${service.id}",
                                         "IMAGE_NAME=${imageName}"
                                     ]) {
                                         sh 'mvn package -pl "${SERVICE_ID}" -am -DskipTests -B --no-transfer-progress'
-                                        sh 'docker buildx build --push -t "${IMAGE_NAME}" "${SERVICE_ID}"'
+                                        sh 'docker buildx build --builder "${DOCKER_BUILDX_BUILDER_VALUE}" -t "${IMAGE_NAME}" --push "${SERVICE_ID}"'
                                     }
                                 }
                             }
