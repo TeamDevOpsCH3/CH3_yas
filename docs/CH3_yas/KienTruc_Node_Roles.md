@@ -1,94 +1,105 @@
-# Kiến trúc cụm K8s — Vì sao Windows làm worker, Mac làm client
+# Kiến trúc cụm K8s — Node, Client & vì sao Tailscale có nhiều máy
 
-> Gửi nhóm Methyl (CH3). Tài liệu giải thích cách 4 laptop + cloud tham gia vào cụm Kubernetes, và vì sao mỗi máy đóng vai khác nhau.
+> Gửi nhóm Methyl (CH3). Giải thích cụm Kubernetes gồm những máy nào, vì sao trong Tailscale thấy **nhiều `client` và `worker`**, và mỗi máy đóng vai gì.
 
 ---
 
 ## TL;DR (đọc nhanh)
 
-- **Cụm thật chạy trên 3 droplet cloud DigitalOcean** (đều amd64) — đây là "xương sống", app chạy ở đây.
-- **2 máy Windows (amd64)** → join làm **worker mở rộng** (node phụ).
-- **2 máy Mac (Apple Silicon = arm64)** → làm **client**, KHÔNG làm node.
-- Lý do gốc: **kiến trúc CPU** (amd64 vs arm64), không phải Mac "yếu" hay bị loại.
-- **2 bạn Mac vẫn làm đầy đủ mọi task** — qua client (giải thích bên dưới).
+- **Cụm thật = 3 droplet cloud (DigitalOcean, amd64)** làm "xương sống" — app + hạ tầng chạy ở đây.
+- **Máy Windows tham gia cụm qua WSL2**: node K8s thật là môi trường **WSL2** bên trong Windows (tên `worker-*-wsl`), KHÔNG phải bản thân máy Windows.
+- **Mỗi laptop Windows xuất hiện 2 lần trong Tailscale**: 1 là host (`client-*`, để gõ kubectl), 1 là WSL2 (`worker-*-wsl`, node thật).
+- **2 máy Mac (arm64)** chỉ làm **client** (điều khiển từ xa), KHÔNG làm node.
+- Cả 4 laptop đều là **client** → ai cũng vận hành cụm được. Đây là bình thường.
 
 ---
 
-## Cụm gồm những gì
+## Toàn bộ máy trong Tailscale & vai trò
 
-| Thành phần | Máy | Vai trò |
-|---|---|---|
-| `master-yasdo` + `worker-yasdo-1/2` | 3 droplet DO (amd64) | **Cụm chính** — app + hạ tầng chạy ở đây |
-| `worker-hiep`, `worker-hoa` | 2 Windows (amd64) | **Worker mở rộng** (node phụ, join sau) |
-| `client-cuong`, `client-hoang` | 2 Mac (arm64) | **Client** — điều khiển cụm từ xa |
-| `jenkins-ec2` | EC2 | **CI** — build/deploy *vào* cụm, KHÔNG phải node |
+| Tên trong Tailscale | Máy vật lý | Vai trò | Có chạy pod? |
+|---|---|---|---|
+| `master-yasdo` | Droplet DO (amd64) | **Node** — control-plane (master) | ✅ |
+| `worker-yasdo-1` | Droplet DO (amd64) | **Node** — worker | ✅ |
+| `worker-yasdo-2` | Droplet DO (amd64) | **Node** — worker | ✅ |
+| `worker-hiep` | WSL2 trong máy Hiệp (amd64) | **Node** — worker mở rộng (on-prem) | ✅ |
+| `worker-hoa` | WSL2 trong máy Hòa (amd64) | **Node** — worker mở rộng *(join sau)* | ✅ |
+| `client-hiep` | Windows host của Hiệp | **Client** — gõ kubectl (host chứa WSL2) | ❌ |
+| `client-hoa` | Windows host của Hòa | **Client** — gõ kubectl (host chứa WSL2) | ❌ |
+| `client-cuong` | Mac (arm64) | **Client** — điều khiển từ xa | ❌ |
+| `client-hoang` | Mac (arm64) | **Client** — điều khiển từ xa | ❌ |
+| `jenkins-ec2` | EC2 | **CI** — build/deploy *vào* cụm | ❌ (không phải node) |
+
+→ Quy tắc nhớ: **`*-yasdo` + `worker-hiep/hoa` = NODE (chạy pod)** · **`client-*` = máy người dùng điều khiển** · **`jenkins-ec2` = CI**.
+
+> **Lưu ý tên khác nhau ở 2 chỗ (cùng 1 máy, không phải lỗi):** trong Tailscale node WSL2 của Hiệp tên `worker-hiep`, nhưng `kubectl get nodes` hiện nó là `laptop-nfigfmr1` (hostname của WSL2). Cùng 1 node, map với nhau qua IP `100.86.181.121`. Tailscale name ≠ kubeadm node name là bình thường.
 
 ---
 
-## Vì sao 2 máy Mac KHÔNG làm node (worker)?
+## ❓ Vì sao Tailscale thấy NHIỀU `client` và `worker`?
+
+Câu hỏi rất hay — có 2 lý do:
+
+**(a) Mỗi máy Windows = 2 mục trong Tailscale.**
+Node Kubernetes thật chạy trong **WSL2** (một Linux riêng *bên trong* Windows). WSL2 join Tailscale như một máy độc lập. Nên 1 laptop Windows vật lý sinh ra 2 "máy":
+- `client-hiep` = **host Windows** (để gõ kubectl, vận hành).
+- `worker-hiep` = **WSL2 bên trong** → đây mới là **node cụm thật** (chạy pod).
+
+Cùng 1 cái laptop, nhưng Tailscale thấy 2 entry. Tương tự cho Hòa.
+
+**(b) Có nhiều `client` vì cả 4 laptop đều vận hành cụm được.**
+2 Mac + 2 Windows host đều cài kubectl → đều là client. Ai cũng điều khiển cụm từ máy mình (giống cả team đều có quyền thao tác). Đây là cách làm bình thường, không thừa.
+
+→ Tóm lại: **node ít hơn số máy hiện ra**. 4 node thật (`master-yasdo`, `worker-yasdo-1/2`, `worker-hiep`; thêm `worker-hoa` khi Hòa join) — phần còn lại là client/host/CI.
+
+---
+
+## Vì sao Mac KHÔNG làm node?
 
 Mấu chốt là **kiến trúc CPU**, không phải hiệu năng:
+- Windows + droplet DO = **amd64**. Mac M-series = **arm64**.
+- Image app YAS build trên Jenkins là **amd64-only** → pod app xếp lên node arm64 (Mac) sẽ **`exec format error`**, CrashLoop. K8s không tự dịch image giữa 2 kiến trúc.
+- Cố cho Mac làm node thì hoặc phải **build multi-arch** (chậm/rủi ro), hoặc **chặn app khỏi Mac** (node vô nghĩa). Cụm cũng đã đủ RAM → không cần.
 
-- Máy Windows + droplet DO = **amd64 (x86_64)**.
-- Máy Mac M-series = **arm64 (Apple Silicon)** — CPU khác hẳn.
-- Image app YAS được build trên Jenkins (EC2) là **amd64-only**. Một pod app amd64 nếu bị xếp lên node arm64 (Mac) sẽ **không chạy được** — lỗi `exec format error`, pod cứ CrashLoopBackOff. Kubernetes **không tự dịch** image giữa 2 kiến trúc.
-
-→ Nếu cố cho Mac làm node, chỉ có 2 đường, đường nào cũng dở:
-1. **Build image multi-arch** (amd64 + arm64) cho cả ~13 service Java → cross-build arm64 rất chậm + dễ lỗi trên agent CI yếu. Không đáng, nhất là sát deadline.
-2. **Ép app không chạy trên Mac** (nodeAffinity) → Mac làm node nhưng không gánh app được gì → làm node vô nghĩa.
-
-→ Cộng thêm: cụm 3 droplet đã có **~24GB RAM**, dư cho workload (~12–16GB). **Không cần RAM của Mac.** Nên cho Mac làm node = thêm phức tạp (arch) + rủi ro mà chẳng được lợi gì.
-
-**Kết luận:** Mac arm64 → **không làm node chạy app**. Để Mac làm **client** (hữu ích hơn nhiều, xem dưới).
+→ Mac arm64 = **client** (hữu ích hơn). *Nhưng Windows cũng arm64?* Không — Windows của nhóm là amd64, nên WSL2 trong đó cũng amd64 → làm node được.
 
 ---
 
-## Vì sao 2 máy Windows làm worker?
+## Vì sao Windows làm worker (qua WSL2)?
 
-- **amd64** → cùng kiến trúc với droplet → app chạy được, **không cần** build multi-arch.
-- Tạo mô hình **"hybrid cloud + on-prem"**: cụm xương sống trên cloud, mở rộng thêm node on-prem (laptop nhóm). Đây là **điểm cải tiến** so với các nhóm chỉ chạy trên laptop hoặc chỉ 1 mô hình — ăn điểm khi vấn đáp.
-- *Lưu ý vận hành:* app thật vẫn ưu tiên chạy trên **droplet** (ổn định, luôn online). Windows-worker dùng để **trình diễn cơ chế mở rộng** (cụm có thể scale ra máy on-prem khi cần). Không để service demo chính phụ thuộc laptop (laptop có thể sleep/tắt).
+- WSL2 trong Windows = **amd64** → cùng kiến trúc droplet → app chạy được, không cần multi-arch.
+- Tạo mô hình **hybrid cloud + on-prem**: cụm xương sống trên cloud, mở rộng node on-prem (laptop). Đây là **điểm cải tiến** khi vấn đáp.
+- *Vận hành:* app thật ưu tiên chạy trên **droplet** (cùng region Singapore, độ trễ <1ms, luôn online). Node WSL2 on-prem có độ trễ ~45ms tới cloud + chỉ sống khi WSL2 chạy → dùng để **trình diễn mở rộng**, không gánh app demo chính.
 
 ---
 
 ## "Client" là gì? Làm được gì?
 
-**Client = máy để *điều khiển* cụm từ xa, không *chạy* cụm.**
+**Client = máy *điều khiển* cụm từ xa, không *chạy* pod.** Cài `kubectl` + `helm` + có kubeconfig → gõ lệnh trên máy mình, chạy thẳng vào cụm qua Tailscale.
 
-Cụ thể: trên máy (Mac hay Windows), bạn cài `kubectl` + `helm`, lấy file **kubeconfig** (Hiệp phát) về máy. Từ đó gõ lệnh **ngay trên máy mình**, lệnh chạy thẳng vào cụm droplet qua mạng Tailscale.
-
-So sánh cho dễ hiểu:
-- **Node** (droplet, Windows-worker) = máy *thực sự chứa và chạy* pod.
-- **Client** (Mac) = máy bạn ngồi gõ lệnh để *ra lệnh* cho cụm — giống điều khiển server từ xa. Bản thân client **không chứa pod nào**.
-
-**Trên client bạn làm được (gần như mọi việc DevOps):**
-- `kubectl get pods / nodes / svc`, xem log (`kubectl logs`), mô tả (`kubectl describe`), debug.
-- `kubectl apply -f ...`, `helm install / upgrade` → deploy & cập nhật service.
-- Vận hành ArgoCD, Istio/Kiali qua CLI.
-- Viết & test manifest/Helm chart, kiểm tra pipeline.
-
-**Không làm được:** chạy pod *trên chính máy mình* (vì máy không phải node) — nhưng điều này không cần thiết, vì pod chạy trên cụm rồi.
+Làm được gần như mọi việc DevOps: `kubectl get/logs/describe/apply`, `helm install/upgrade`, vận hành ArgoCD/Istio, viết & test manifest, debug. Chỉ **không** chạy pod trên chính máy mình (không cần, vì pod chạy trên cụm).
 
 ---
 
 ## 2 bạn Mac có bị thiệt không? → KHÔNG
 
-- Làm client **không phải bị loại** — đây là **cách làm DevOps chuẩn thực tế**: hầu như không ai ngồi trực tiếp trên node để làm việc, tất cả đều điều khiển cụm từ xa qua kubectl/kubeconfig.
-- 2 bạn Mac vẫn làm **đầy đủ task của mình**: viết manifest, deploy bằng Helm, test CD, xem log, debug service... — tất cả qua client.
-- Thực tế **cả nhóm (kể cả Windows)** đều nên dùng client để vận hành cho tiện, thay vì SSH vào droplet mỗi lần.
+- Làm client là **cách làm DevOps chuẩn** — không ai ngồi trực tiếp trên node, đều điều khiển từ xa.
+- 2 bạn Mac làm **đầy đủ task**: viết manifest, deploy Helm, test CD, xem log, debug — tất cả qua client.
+- Thực tế **cả nhóm** (kể cả Windows) đều dùng client để vận hành cho tiện.
 
 ---
 
-## Cách biến máy mình thành client (mỗi người tự làm)
+## Cách biến máy mình thành client (mỗi người)
 
-1. Cài **kubectl** + **helm** trên máy.
-2. Xin **kubeconfig** từ Hiệp (đây là chìa khóa truy cập cụm — giữ riêng tư, không chia sẻ công khai).
-3. Bỏ kubeconfig vào `~/.kube/config` (Mac/Linux) hoặc `%USERPROFILE%\.kube\config` (Windows).
-4. Đảm bảo **Tailscale đang Connected** (kubeconfig trỏ vào IP Tailscale của master).
-5. Test: `kubectl get nodes` → thấy 3 node droplet **Ready** là thành công — bạn đã điều khiển được cụm từ máy mình.
+1. Cài **kubectl** + **helm**.
+2. Xin **kubeconfig** từ Hiệp (chìa khóa cụm — giữ riêng tư, không up Git/chat chung).
+3. Bỏ vào `~/.kube/config` (Mac) hoặc `%USERPROFILE%\.kube\config` (Windows).
+4. Đảm bảo **Tailscale Connected** (kubeconfig trỏ IP Tailscale master).
+5. `kubectl get nodes` → thấy các node **Ready** = thành công.
+
+*(Máy Windows muốn làm thêm **worker** thì theo file `HuongDan_Join_Windows_WSL2.md` — đó là việc khác với làm client.)*
 
 ---
 
 ## Tóm lại 1 câu
 
-**Droplet = cụm (app chạy) · Windows = worker mở rộng (amd64, demo hybrid) · Mac = client (điều khiển từ xa, vì arm64 không chạy được image app) · EC2 = CI.** Mỗi máy một vai đúng thế mạnh — không ai thừa, không ai thiệt.
+**Node chạy pod = 3 droplet (`*-yasdo`) + WSL2 trong máy Windows (`*-wsl`).** Mọi `client-*` là máy điều khiển (kể cả host Windows chứa WSL2), `jenkins-ec2` là CI. Tailscale thấy nhiều máy vì 1 laptop Windows = host + WSL2, và cả 4 laptop đều làm client — không có gì thừa.
