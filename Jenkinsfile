@@ -294,19 +294,58 @@ pipeline {
         // Image tag is the current commit id for traceable deployments     //
         // ---------------------------------------------------------------- //
         stage('Build & Push Images') {
-            agent { label 'build-agent' }
             steps {
                 script {
-                    checkout scm
+                    // ====== Build SONG SONG tối đa 2 (chunk 2). Revert TUẦN TỰ: đổi collate(2) -> collate(1). ======
+                    def registry      = params.DOCKER_REGISTRY.trim()
+                    def namespace     = params.DOCKER_IMAGE_NAMESPACE.trim()
+                    def imagePrefix   = params.DOCKER_IMAGE_PREFIX.trim()
+                    def buildxBuilder = params.DOCKER_BUILDX_BUILDER.trim()
 
-                    def servicesToRun = env.SERVICES_TO_RUN
-                        ? env.SERVICES_TO_RUN.split(',').toList()
-                        : []
+                    def servicesToBuild = []
+                    def commitTag = ''
 
-                    def servicesToBuild = microservices.findAll { service ->
-                        servicesToRun.contains(service.display) &&
-                        (service.enableBuild ?: false) &&
-                        fileExists("${service.id}/Dockerfile")
+                    // B1. Chuẩn bị 1 lần: danh sách build + tag + docker login + builder (host dùng chung)
+                    node('build-agent') {
+                        checkout scm
+                        def servicesToRun = env.SERVICES_TO_RUN
+                            ? env.SERVICES_TO_RUN.split(',').toList()
+                            : []
+                        servicesToBuild = microservices.findAll { service ->
+                            servicesToRun.contains(service.display) &&
+                            (service.enableBuild ?: false) &&
+                            fileExists("${service.id}/Dockerfile")
+                        }
+                        if (!servicesToBuild.isEmpty()) {
+                            commitTag = sh(script: 'git rev-parse --short=12 HEAD', returnStdout: true).trim()
+                            withEnv([
+                                "DOCKER_REGISTRY_VALUE=${registry}",
+                                "DOCKER_BUILDX_BUILDER_VALUE=${buildxBuilder}"
+                            ]) {
+                                withCredentials([usernamePassword(
+                                    credentialsId: params.DOCKER_CREDENTIALS_ID,
+                                    usernameVariable: 'DOCKER_USERNAME',
+                                    passwordVariable: 'DOCKER_PASSWORD'
+                                )]) {
+                                    sh '''
+                                        set +x
+                                        printf '%s' "${DOCKER_PASSWORD}" | docker login "${DOCKER_REGISTRY_VALUE}" -u "${DOCKER_USERNAME}" --password-stdin
+                                        set -x
+                                    '''
+                                    sh '''
+                                        if ! docker buildx version >/dev/null 2>&1; then
+                                            echo 'Docker Buildx is not available on this Jenkins agent.'
+                                            exit 1
+                                        fi
+                                        if ! docker buildx inspect "${DOCKER_BUILDX_BUILDER_VALUE}" >/dev/null 2>&1; then
+                                            docker buildx create --name "${DOCKER_BUILDX_BUILDER_VALUE}" --use
+                                        fi
+                                        docker buildx use "${DOCKER_BUILDX_BUILDER_VALUE}"
+                                        docker buildx inspect --bootstrap
+                                    '''
+                                }
+                            }
+                        }
                     }
 
                     if (servicesToBuild.isEmpty()) {
@@ -314,79 +353,51 @@ pipeline {
                         return
                     }
 
-                    def mvnHome = tool 'maven-3.9'
-                    def jdkHome = tool 'jdk-25'
-                    def commitTag = sh(
-                        script: 'git rev-parse --short=12 HEAD',
-                        returnStdout: true
-                    ).trim()
-                    def registry = params.DOCKER_REGISTRY.trim()
-                    def namespace = params.DOCKER_IMAGE_NAMESPACE.trim()
-                    def imagePrefix = params.DOCKER_IMAGE_PREFIX.trim()
-                    def buildxBuilder = params.DOCKER_BUILDX_BUILDER.trim()
-
-                    withEnv([
-                        "PATH+MAVEN=${mvnHome}/bin",
-                        "JAVA_HOME=${jdkHome}",
-                        "PATH+JDK=${jdkHome}/bin",
-                        "DOCKER_REGISTRY_VALUE=${registry}",
-                        "DOCKER_BUILDX_BUILDER_VALUE=${buildxBuilder}"
-                    ]) {
-                        withCredentials([usernamePassword(
-                            credentialsId: params.DOCKER_CREDENTIALS_ID,
-                            usernameVariable: 'DOCKER_USERNAME',
-                            passwordVariable: 'DOCKER_PASSWORD'
-                        )]) {
-                            sh '''
-                                set +x
-                                printf '%s' "${DOCKER_PASSWORD}" | docker login "${DOCKER_REGISTRY_VALUE}" -u "${DOCKER_USERNAME}" --password-stdin
-                                set -x
-                            '''
-                            sh '''
-                                if ! docker buildx version >/dev/null 2>&1; then
-                                    echo 'Docker Buildx is not available on this Jenkins agent.'
-                                    echo 'Install/enable the docker-buildx plugin on Build-Agent-CH3, then rerun this pipeline.'
-                                    exit 1
-                                fi
-
-                                if ! docker buildx build --help | grep -q -- '--push'; then
-                                    echo 'Docker Buildx on this Jenkins agent does not support --push.'
-                                    echo 'Update Docker/buildx on Build-Agent-CH3, then rerun this pipeline.'
-                                    exit 1
-                                fi
-
-                                if ! docker buildx inspect "${DOCKER_BUILDX_BUILDER_VALUE}" >/dev/null 2>&1; then
-                                    docker buildx create --name "${DOCKER_BUILDX_BUILDER_VALUE}" --use
-                                fi
-
-                                docker buildx use "${DOCKER_BUILDX_BUILDER_VALUE}"
-                                docker buildx inspect --bootstrap
-                            '''
-
-                            servicesToBuild.each { service ->
-                                def imageRepository = [registry, namespace, "${imagePrefix}${service.id}"]
-                                    .findAll { it }
-                                    .join('/')
-                                def imageName = "${imageRepository}:${commitTag}"
-
-                                stage("${service.display}: Build & Push Image") {
-                                    echo "Building and pushing image for ${service.display} with tag ${commitTag}"
+                    // B2. Build theo nhóm 2 — mỗi nhóm xong mới sang nhóm kế (tối đa 2 cùng lúc)
+                    servicesToBuild.collate(2).each { chunk ->
+                        def branches = [:]
+                        chunk.each { service ->
+                            def svc = service
+                            def imageRepository = [registry, namespace, "${imagePrefix}${svc.id}"]
+                                .findAll { it }
+                                .join('/')
+                            def imageName = "${imageRepository}:${commitTag}"
+                            branches["${svc.display}"] = {
+                                node('build-agent') {
+                                    def mvnHome = tool 'maven-3.9'
+                                    def jdkHome = tool 'jdk-25'
                                     withEnv([
-                                        "SERVICE_ID=${service.id}",
+                                        "PATH+MAVEN=${mvnHome}/bin",
+                                        "JAVA_HOME=${jdkHome}",
+                                        "PATH+JDK=${jdkHome}/bin",
+                                        "DOCKER_BUILDX_BUILDER_VALUE=${buildxBuilder}",
+                                        "SERVICE_ID=${svc.id}",
                                         "IMAGE_NAME=${imageName}"
                                     ]) {
-                                        if ((service.buildTool ?: 'maven') == 'maven') {
-                                            sh 'mvn package -pl "${SERVICE_ID}" -am -DskipTests -B --no-transfer-progress'
-                                            sh 'docker buildx build --builder "${DOCKER_BUILDX_BUILDER_VALUE}" -t "${IMAGE_NAME}" --push "${SERVICE_ID}"'
-                                        } else {
-                                            // UI Next.js: cap heap Node để không OOM agent 2GB (Dockerfile phải có ARG NODE_OPTIONS)
-                                            sh 'docker buildx build --builder "${DOCKER_BUILDX_BUILDER_VALUE}" --build-arg NODE_OPTIONS=--max-old-space-size=1536 -t "${IMAGE_NAME}" --push "${SERVICE_ID}"'
+                                        try {
+                                            checkout scm
+                                            echo "Building and pushing image for ${svc.display} with tag ${commitTag}"
+                                            if ((svc.buildTool ?: 'maven') == 'maven') {
+                                                sh 'mvn package -pl "${SERVICE_ID}" -am -DskipTests -B --no-transfer-progress'
+                                                sh 'docker buildx build --builder "${DOCKER_BUILDX_BUILDER_VALUE}" -t "${IMAGE_NAME}" --push "${SERVICE_ID}"'
+                                            } else {
+                                                // UI Next.js: cap heap Node de khong OOM agent 2GB
+                                                sh 'docker buildx build --builder "${DOCKER_BUILDX_BUILDER_VALUE}" --build-arg NODE_OPTIONS=--max-old-space-size=1536 -t "${IMAGE_NAME}" --push "${SERVICE_ID}"'
+                                            }
+                                        } finally {
+                                            cleanWs()
                                         }
                                     }
                                 }
                             }
+                        }
+                        parallel branches
+                    }
 
-                            sh 'docker logout "${DOCKER_REGISTRY_VALUE}"'
+                    // B3. Logout 1 lan
+                    node('build-agent') {
+                        withEnv(["DOCKER_REGISTRY_VALUE=${registry}"]) {
+                            sh 'docker logout "${DOCKER_REGISTRY_VALUE}" || true'
                         }
                     }
                 }
