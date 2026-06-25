@@ -188,6 +188,7 @@ pipeline {
     stages {
         stage('Gitleaks Security Scan') {
             agent { label 'built-in' }
+            when { expression { !(env.BRANCH_NAME ?: '').startsWith('fastImage/') } }
             steps {
                 script {
                     catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE', message: 'Gitleaks scan failed: potential secrets detected. Check the logs for details.') {
@@ -225,7 +226,7 @@ pipeline {
                     env.SERVICES_TO_RUN = microservices
                         .findAll { service ->
                             def serviceChanged = changedPaths.any { it.startsWith(service.id + '/') }
-                            params.FORCE_RUN_ALL || noScmContext || pomChanged || pipelineChanged || globalConfigChanged || serviceChanged
+                            params.FORCE_RUN_ALL || (env.BRANCH_NAME ?: '').startsWith('fastImage/') || noScmContext || pomChanged || pipelineChanged || globalConfigChanged || serviceChanged
                         }
                         .collect { it.display }
                         .join(',')
@@ -241,6 +242,7 @@ pipeline {
         // Running all in parallel saturates RAM → OOM → Jenkins restart   //
         // ---------------------------------------------------------------- //
         stage('Test & Coverage') {
+            when { expression { !(env.BRANCH_NAME ?: '').startsWith('fastImage/') } }
             steps {
                 script {
                     def servicesToRun = env.SERVICES_TO_RUN
@@ -353,17 +355,17 @@ pipeline {
                         return
                     }
 
-                    // B2. Build theo nhóm 2 — mỗi nhóm xong mới sang nhóm kế (tối đa 2 cùng lúc)
-                    servicesToBuild.collate(2).each { chunk ->
-                        def branches = [:]
-                        chunk.each { service ->
-                            def svc = service
-                            def imageRepository = [registry, namespace, "${imagePrefix}${svc.id}"]
-                                .findAll { it }
-                                .join('/')
-                            def imageName = "${imageRepository}:${commitTag}"
-                            branches["${svc.display}"] = {
-                                node('build-agent') {
+                    // B2. Build "trống là vào" — giới hạn = số executor agent (đặt = 2 trong Nodes; nâng 3 sau, KHÔNG sửa code)
+                    def branches = [:]
+                    servicesToBuild.each { service ->
+                        def svc = service
+                        def imageRepository = [registry, namespace, "${imagePrefix}${svc.id}"]
+                            .findAll { it }
+                            .join('/')
+                        def imageName = "${imageRepository}:${commitTag}"
+                        branches["${svc.display}"] = {
+                            node('build-agent') {
+                                stage("${svc.display}: Build & Push") {
                                     def mvnHome = tool 'maven-3.9'
                                     def jdkHome = tool 'jdk-25'
                                     withEnv([
@@ -391,8 +393,8 @@ pipeline {
                                 }
                             }
                         }
-                        parallel branches
                     }
+                    parallel branches
 
                     // B3. Logout 1 lan
                     node('build-agent') {
@@ -437,6 +439,7 @@ pipeline {
 
         stage('SonarCloud Scan') {
             agent { label 'build-agent' }
+            when { expression { !(env.BRANCH_NAME ?: '').startsWith('fastImage/') } }
             steps {
                 script {
                     def servicesToRun = env.SERVICES_TO_RUN
