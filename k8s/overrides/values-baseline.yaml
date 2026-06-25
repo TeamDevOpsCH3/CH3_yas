@@ -1,0 +1,17 @@
+# C12 — Override env-common cho BASELINE (namespace: yas, tag: main)
+# Dùng chung cho MỌI service khi deploy vào ns yas (-f values-baseline.yaml).
+# image.repository đặt PER-SERVICE lúc deploy (cd-deploy.sh / ArgoCD helm.parameters)
+# vì mỗi service trỏ về 1 repo Docker Hub khác nhau (methylch3/yas-<svc>).
+#
+# Lưu ý 2 họ chart: Java/BFF/sampledata dùng key `backend.*`, 2 UI dùng key `ui.*`.
+# Đặt cả 2 khối ở đây cho tiện; chart nào không dùng khối kia thì Helm bỏ qua (vô hại).
+
+backend:
+  image:
+    tag: main                 # baseline = nhánh main (production-ready, đã qua PR + CI)
+    pullPolicy: IfNotPresent   # tag main ổn định; muốn chắc bản mới thì rollout restart
+
+ui:
+  image:
+    tag: main
+    pullPolicy: IfNotPresent

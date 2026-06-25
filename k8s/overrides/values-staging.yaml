@@ -1,0 +1,13 @@
+# C18 — Override env-common cho STAGING (namespace: staging, nhánh: main)
+# main (sau PR approve) → ns staging: môi trường CAO NHẤT, ổn định nhất (đồ án không có production).
+# image.repository đặt per-service lúc deploy; image.tag/pullPolicy env-common ở đây.
+
+backend:
+  image:
+    tag: main
+    pullPolicy: IfNotPresent   # staging ổn định, không kéo lại liên tục như dev
+
+ui:
+  image:
+    tag: main
+    pullPolicy: IfNotPresent
