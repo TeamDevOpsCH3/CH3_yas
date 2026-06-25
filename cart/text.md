@@ -1,1 +1,0 @@
-test detect + push image trên 1 service
