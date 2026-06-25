@@ -135,6 +135,31 @@ pipeline {
     }
 
     parameters {
+        string(
+            name        : 'DOCKER_REGISTRY',
+            defaultValue: 'docker.io',
+            description : 'Docker registry used to push service images'
+        )
+        string(
+            name        : 'DOCKER_IMAGE_NAMESPACE',
+            defaultValue: 'methylch3',
+            description : 'Docker image namespace/organization'
+        )
+        string(
+            name        : 'DOCKER_IMAGE_PREFIX',
+            defaultValue: 'yas-',
+            description : 'Prefix for generated image names, e.g. yas-product'
+        )
+        string(
+            name        : 'DOCKER_CREDENTIALS_ID',
+            defaultValue: 'dockerhub-creds',
+            description : 'Jenkins username/password credentials ID for Docker registry login'
+        )
+        string(
+            name        : 'DOCKER_BUILDX_BUILDER',
+            defaultValue: 'yas-builder',
+            description : 'Docker Buildx builder name used on Jenkins build agents'
+        )
         booleanParam(
             name        : 'FORCE_RUN_ALL',
             defaultValue: false,
@@ -262,7 +287,106 @@ pipeline {
         }
 
         // ---------------------------------------------------------------- //
-        // Stage 3: Snyk scan ONCE for entire project (not per service)     //
+        // Stage 3: Build + Push Docker images for changed services only    //
+        // Image tag is the current commit id for traceable deployments     //
+        // ---------------------------------------------------------------- //
+        stage('Build & Push Images') {
+            agent { label 'build-agent' }
+            steps {
+                script {
+                    checkout scm
+
+                    def servicesToRun = env.SERVICES_TO_RUN
+                        ? env.SERVICES_TO_RUN.split(',').toList()
+                        : []
+
+                    def servicesToBuild = microservices.findAll { service ->
+                        servicesToRun.contains(service.display) &&
+                        (service.enableBuild ?: false) &&
+                        fileExists("${service.id}/Dockerfile")
+                    }
+
+                    if (servicesToBuild.isEmpty()) {
+                        echo 'No changed services with Dockerfile found. Skipping image build/push.'
+                        return
+                    }
+
+                    def mvnHome = tool 'maven-3.9'
+                    def jdkHome = tool 'jdk-25'
+                    def commitTag = sh(
+                        script: 'git rev-parse --short=12 HEAD',
+                        returnStdout: true
+                    ).trim()
+                    def registry = params.DOCKER_REGISTRY.trim()
+                    def namespace = params.DOCKER_IMAGE_NAMESPACE.trim()
+                    def imagePrefix = params.DOCKER_IMAGE_PREFIX.trim()
+                    def buildxBuilder = params.DOCKER_BUILDX_BUILDER.trim()
+
+                    withEnv([
+                        "PATH+MAVEN=${mvnHome}/bin",
+                        "JAVA_HOME=${jdkHome}",
+                        "PATH+JDK=${jdkHome}/bin",
+                        "DOCKER_REGISTRY_VALUE=${registry}",
+                        "DOCKER_BUILDX_BUILDER_VALUE=${buildxBuilder}"
+                    ]) {
+                        withCredentials([usernamePassword(
+                            credentialsId: params.DOCKER_CREDENTIALS_ID,
+                            usernameVariable: 'DOCKER_USERNAME',
+                            passwordVariable: 'DOCKER_PASSWORD'
+                        )]) {
+                            sh '''
+                                set +x
+                                printf '%s' "${DOCKER_PASSWORD}" | docker login "${DOCKER_REGISTRY_VALUE}" -u "${DOCKER_USERNAME}" --password-stdin
+                                set -x
+                            '''
+                            sh '''
+                                if ! docker buildx version >/dev/null 2>&1; then
+                                    echo 'Docker Buildx is not available on this Jenkins agent.'
+                                    echo 'Install/enable the docker-buildx plugin on Build-Agent-CH3, then rerun this pipeline.'
+                                    exit 1
+                                fi
+
+                                if ! docker buildx build --help | grep -q -- '--push'; then
+                                    echo 'Docker Buildx on this Jenkins agent does not support --push.'
+                                    echo 'Update Docker/buildx on Build-Agent-CH3, then rerun this pipeline.'
+                                    exit 1
+                                fi
+
+                                if ! docker buildx inspect "${DOCKER_BUILDX_BUILDER_VALUE}" >/dev/null 2>&1; then
+                                    docker buildx create --name "${DOCKER_BUILDX_BUILDER_VALUE}" --use
+                                fi
+
+                                docker buildx use "${DOCKER_BUILDX_BUILDER_VALUE}"
+                                docker buildx inspect --bootstrap
+                            '''
+
+                            servicesToBuild.each { service ->
+                                def imageRepository = [registry, namespace, "${imagePrefix}${service.id}"]
+                                    .findAll { it }
+                                    .join('/')
+                                def imageName = "${imageRepository}:${commitTag}"
+
+                                stage("${service.display}: Build & Push Image") {
+                                    echo "Building and pushing image for ${service.display} with tag ${commitTag}"
+                                    withEnv([
+                                        "SERVICE_ID=${service.id}",
+                                        "IMAGE_NAME=${imageName}"
+                                    ]) {
+                                        sh 'mvn package -pl "${SERVICE_ID}" -am -DskipTests -B --no-transfer-progress'
+                                        sh 'docker buildx build --builder "${DOCKER_BUILDX_BUILDER_VALUE}" -t "${IMAGE_NAME}" --push "${SERVICE_ID}"'
+                                    }
+                                }
+                            }
+
+                            sh 'docker logout "${DOCKER_REGISTRY_VALUE}"'
+                        }
+                    }
+                }
+            }
+        }
+
+        // ---------------------------------------------------------------- //
+        // Stage 4: Snyk scan ONCE for entire project (not per service)     //
         // Only runs when ENABLE_SNYK_SCAN = true (manual trigger)          //
         // ---------------------------------------------------------------- //
         stage('Snyk Security Scan') {
