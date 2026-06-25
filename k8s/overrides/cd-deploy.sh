@@ -22,6 +22,11 @@ ORG="${ORG:-methylch3}"
 CHARTS="${CHARTS:-../charts}"
 VALUES="values-${ENV}.yaml"
 
+# --- Demo hybrid: vài service GHÌ CỨNG xuống node on-prem (máy Hiệp) ----------
+# Phần còn lại đã ưu tiên droplet (affinity mềm trong values-*.yaml).
+# ONPREM = service nhẹ ưu tiên (mềm) pool on-prem node-type=onprem (xem values-onprem.yaml).
+ONPREM="${ONPREM:-storefront-ui backoffice-ui tax customer swagger-ui}"
+
 case "$ENV" in
   baseline) NS="yas";     SUFFIX="";         DOMAIN="${DOMAIN:-yas.local.com}";;
   dev)      NS="dev";     SUFFIX="_dev";     DOMAIN="${DOMAIN:-dev.yas.local.com}";;
@@ -85,16 +90,25 @@ while read -r NAME FAMILY IMG DB; do
     swagger-ui)     SET+=(--set "ingress.host=api.${DOMAIN}");;
   esac
 
+  # Demo hybrid: service trong ONPREM ƯU TIÊN MỀM xuống node máy Hiệp qua overlay
+  # values-onprem.yaml. Máy bật → chạy on-prem; máy tắt → tự nhảy lên droplet
+  # (preferred = mềm, không kẹt Pending). Các service khác giữ "ưu tiên cloud".
+  ONPREM_F=()
+  if [[ " $ONPREM " == *" $NAME "* ]]; then
+    ONPREM_F+=(-f "values-onprem.yaml")
+    echo "   ⤷ $NAME ưu tiên (mềm) pool on-prem; cả 2 máy tắt thì rớt về droplet"
+  fi
+
   helm dependency build "$CHART" >/dev/null 2>&1 || true
 
   if [ "$DRY" = "1" ]; then
     echo "── render: $NAME ($FAMILY) ─────────────────────────────"
-    helm template "$NAME" "$CHART" -n "$NS" -f "$VALUES" "${SET[@]}"
+    helm template "$NAME" "$CHART" -n "$NS" -f "$VALUES" "${ONPREM_F[@]}" "${SET[@]}"
   else
     echo "▶  deploy: $NAME -> ns/$NS  (${ORG}/${IMG:-official})"
     helm upgrade --install "$NAME" "$CHART" \
       --namespace "$NS" --create-namespace \
-      -f "$VALUES" "${SET[@]}"
+      -f "$VALUES" "${ONPREM_F[@]}" "${SET[@]}"
     sleep 5
   fi
 done <<< "$SERVICES"

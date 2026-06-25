@@ -1,26 +1,32 @@
 # C18 — Override env-common cho DEV (namespace: dev, nhánh: develop)
 # develop → ns dev: môi trường tích hợp, hứng thay đổi sớm.
-# image.repository đặt per-service lúc deploy; image.tag/pullPolicy env-common ở đây.
 
 backend:
   image:
-    tag: develop              # dev bám nhánh develop
-    pullPolicy: Always         # tag mutable → luôn kéo bản mới nhất khi pod tạo lại
+    tag: develop               # dev bám nhánh develop
+    pullPolicy: Always          # tag mutable → luôn kéo bản mới nhất khi pod tạo lại
+  serviceMonitor:
+    enabled: false
+  affinity:
+    nodeAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 80
+          preference:
+            matchExpressions:
+              - key: node-type
+                operator: In
+                values: ["cloud"]
 
 ui:
   image:
     tag: develop
     pullPolicy: Always
-
-# (Tùy chọn) ghì nhẹ app về droplet cho ổn định — KHÔNG ép theo arch (cụm đồng nhất amd64).
-# Bỏ comment nếu muốn ưu tiên node cloud hơn worker on-prem WSL2:
-# backend:
-#   affinity:
-#     nodeAffinity:
-#       preferredDuringSchedulingIgnoredDuringExecution:
-#         - weight: 80
-#           preference:
-#             matchExpressions:
-#               - key: node-type
-#                 operator: In
-#                 values: ["cloud"]
+  affinity:
+    nodeAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 80
+          preference:
+            matchExpressions:
+              - key: node-type
+                operator: In
+                values: ["cloud"]

@@ -26,11 +26,27 @@ k8s/overrides/
    `kafka-cluster-kafka-brokers.kafka`...) → **0 dòng override endpoint**, app ở mọi ns gọi
    cross-namespace `<svc>.<ns>` là chạy.
 
+## Bố trí node (demo hybrid)
+- **9 service nặng**: affinity **mềm** ưu tiên droplet (`node-type=cloud`, weight 80).
+- **5 service nhẹ** (`storefront-ui`, `backoffice-ui`, `tax`, `customer`, `swagger-ui`): affinity **mềm**
+  ưu tiên **pool on-prem** (`node-type=onprem`, weight 100, qua overlay `values-onprem.yaml`).
+  - 1 hoặc cả 2 máy on-prem (Hiệp `laptop-nfigfmr1` + Hòa `worker-hoa`) **BẬT** → scheduler tự **rải**
+    5 pod này lên pool on-prem (minh chứng hybrid).
+  - Cả 2 máy on-prem **TẮT** → preference không khớp → 5 pod **tự lên droplet**, web KHÔNG sập, không kẹt Pending.
+- ⚠️ **Lúc deploy nên bật CẢ 2 máy on-prem** để tải chia đều; nếu chỉ 1 máy bật, 5 pod dồn về máy đó
+  (pull 5 image cùng lúc → có thể nghẽn I/O). Bật cả 2 thì mỗi máy ~2-3 image, nhẹ.
+- Đổi danh sách: `ONPREM="storefront-ui tax" ./cd-deploy.sh baseline`.
+
 ## Chạy
 ```bash
 cd k8s/overrides
 
-# C12 — baseline vào ns yas (smoke-test bộ chart + image)
+# (1 lần) gắn nhãn node: 3 droplet = cloud, 2 máy on-prem = onprem:
+kubectl label node yas-master yas-worker-1 yas-worker-2 node-type=cloud --overwrite
+kubectl label node laptop-nfigfmr1 worker-hoa node-type=onprem --overwrite
+kubectl get nodes -L node-type            # kiểm nhãn đúng
+
+# C12 — baseline vào ns yas
 ./cd-deploy.sh baseline
 
 # C18 — tạo ns rồi deploy dev/staging
@@ -38,7 +54,8 @@ kubectl apply -f ns-dev-staging.yaml
 ./cd-deploy.sh dev
 ./cd-deploy.sh staging
 ```
-Script tự cài `yas-configuration` (ConfigMap/Secret dùng chung) vào từng ns trước khi deploy app.
+Script tự cài `yas-configuration` (ConfigMap/Secret dùng chung) vào từng ns trước khi deploy app,
+tắt `serviceMonitor` (cụm không có Prometheus Operator), và set affinity/nodeSelector như trên.
 
 ## Verify (checklist C12)
 ```bash

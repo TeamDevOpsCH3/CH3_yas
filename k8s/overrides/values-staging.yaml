@@ -1,13 +1,32 @@
 # C18 — Override env-common cho STAGING (namespace: staging, nhánh: main)
-# main (sau PR approve) → ns staging: môi trường CAO NHẤT, ổn định nhất (đồ án không có production).
-# image.repository đặt per-service lúc deploy; image.tag/pullPolicy env-common ở đây.
+# main (sau PR approve) → ns staging: môi trường CAO NHẤT, ổn định nhất.
 
 backend:
   image:
     tag: main
-    pullPolicy: IfNotPresent   # staging ổn định, không kéo lại liên tục như dev
+    pullPolicy: IfNotPresent
+  serviceMonitor:
+    enabled: false
+  affinity:
+    nodeAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 80
+          preference:
+            matchExpressions:
+              - key: node-type
+                operator: In
+                values: ["cloud"]
 
 ui:
   image:
     tag: main
     pullPolicy: IfNotPresent
+  affinity:
+    nodeAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 80
+          preference:
+            matchExpressions:
+              - key: node-type
+                operator: In
+                values: ["cloud"]
