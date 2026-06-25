@@ -19,6 +19,8 @@ def microservices = [
     [id: 'webhook',        display: 'Webhook Service',        enableTest: true,  enableCoverage: true,  enableBuild: true,  commands: []],
     [id: 'sampledata',     display: 'Sampledata Service',     enableTest: false, enableCoverage: false, enableBuild: true,  commands: []],
     [id: 'recommendation', display: 'Recommendation Service', enableTest: false, enableCoverage: false, enableBuild: true,  commands: []], 
+    [id: 'storefront',     display: 'Storefront UI',          enableTest: false, enableCoverage: false, enableBuild: true,  buildTool: 'node', commands: []],
+    [id: 'backoffice',     display: 'Backoffice UI',          enableTest: false, enableCoverage: false, enableBuild: true,  buildTool: 'node', commands: []],
     [id: 'delivery',       display: 'Delivery Service',       enableTest: false, enableCoverage: false, enableBuild: false, commands: []], 
 ]
 
@@ -41,6 +43,7 @@ def runServicePipeline(service) {
     def enableTest     = service.enableTest     ?: false
     def enableCoverage = service.enableCoverage ?: false
     def enableBuild    = service.enableBuild    ?: false
+    def buildTool      = service.buildTool      ?: 'maven'
     def commands       = service.commands       ?: []
 
     // ------------------------------------------------------------------ //
@@ -88,7 +91,7 @@ def runServicePipeline(service) {
         )
     }
 
-    if (enableBuild) {
+    if (enableBuild && buildTool == 'maven') {
         stage("${serviceDisplay}: Build") {
             sh "mvn package -pl ${serviceId} -am -DskipTests -B --no-transfer-progress"
         }
@@ -372,8 +375,13 @@ pipeline {
                                         "SERVICE_ID=${service.id}",
                                         "IMAGE_NAME=${imageName}"
                                     ]) {
-                                        sh 'mvn package -pl "${SERVICE_ID}" -am -DskipTests -B --no-transfer-progress'
-                                        sh 'docker buildx build --builder "${DOCKER_BUILDX_BUILDER_VALUE}" -t "${IMAGE_NAME}" --push "${SERVICE_ID}"'
+                                        if ((service.buildTool ?: 'maven') == 'maven') {
+                                            sh 'mvn package -pl "${SERVICE_ID}" -am -DskipTests -B --no-transfer-progress'
+                                            sh 'docker buildx build --builder "${DOCKER_BUILDX_BUILDER_VALUE}" -t "${IMAGE_NAME}" --push "${SERVICE_ID}"'
+                                        } else {
+                                            // UI Next.js: cap heap Node để không OOM agent 2GB (Dockerfile phải có ARG NODE_OPTIONS)
+                                            sh 'docker buildx build --builder "${DOCKER_BUILDX_BUILDER_VALUE}" --build-arg NODE_OPTIONS=--max-old-space-size=1536 -t "${IMAGE_NAME}" --push "${SERVICE_ID}"'
+                                        }
                                     }
                                 }
                             }
