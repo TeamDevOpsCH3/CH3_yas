@@ -27,6 +27,10 @@ VALUES="values-${ENV}.yaml"
 # ONPREM = service nhẹ ưu tiên (mềm) pool on-prem node-type=onprem (xem values-onprem.yaml).
 ONPREM="${ONPREM:-storefront-ui backoffice-ui tax customer swagger-ui}"
 
+# HIKARI_POOL = số connection tối đa MỖI service Postgres (mặc định chart=10).
+# Giảm còn 5 để 3 môi trường (yas+dev+staging) không vượt max_connections=200 của Postgres.
+HIKARI_POOL="${HIKARI_POOL:-5}"
+
 case "$ENV" in
   baseline) NS="yas";     SUFFIX="";         DOMAIN="${DOMAIN:-yas.local.com}";;
   dev)      NS="dev";     SUFFIX="_dev";     DOMAIN="${DOMAIN:-dev.yas.local.com}";;
@@ -81,6 +85,14 @@ while read -r NAME FAMILY IMG DB; do
   # DB theo env: chỉ service có DB + chỉ dev/staging mới gắn hậu tố
   if [ "$DB" != "-" ] && [ -n "$SUFFIX" ]; then
     SET+=(--set "${FAMILY}.databaseName=${DB}${SUFFIX}")
+  fi
+
+  # Hikari pool: service dùng Postgres giảm pool (mặc định 10) → tránh tràn
+  # max_connections=200 khi chạy đồng thời 3 môi trường. KHÔNG đụng BFF/UI
+  # (BFF có extraEnvs riêng + không dùng Postgres).
+  if [ "$DB" != "-" ]; then
+    SET+=(--set "${FAMILY}.extraEnvs[0].name=SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE")
+    SET+=(--set-string "${FAMILY}.extraEnvs[0].value=${HIKARI_POOL}")
   fi
 
   # ingress host (nếu chart bật ingress): bff + swagger
