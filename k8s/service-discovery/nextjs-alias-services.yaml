@@ -1,0 +1,39 @@
+apiVersion: v1
+kind: Service
+metadata:
+  name: storefront-nextjs
+  namespace: dev
+  labels:
+    app.kubernetes.io/part-of: yas
+    app.kubernetes.io/component: service-discovery-alias
+    c14.fix: nextjs-alias
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 3000
+      targetPort: 3000
+      protocol: TCP
+  selector:
+    app.kubernetes.io/instance: storefront-ui
+    app.kubernetes.io/name: storefront-ui
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: backoffice-nextjs
+  namespace: dev
+  labels:
+    app.kubernetes.io/part-of: yas
+    app.kubernetes.io/component: service-discovery-alias
+    c14.fix: nextjs-alias
+spec:
+  type: ClusterIP
+  ports:
+    - name: http
+      port: 3000
+      targetPort: 3000
+      protocol: TCP
+  selector:
+    app.kubernetes.io/instance: backoffice-ui
+    app.kubernetes.io/name: backoffice-ui
