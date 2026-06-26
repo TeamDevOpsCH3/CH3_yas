@@ -1,65 +1,75 @@
-# Hướng dẫn Backup etcd tự động (2 bản: master + client)
+# Hướng dẫn Backup — etcd snapshot + PKI (cert)
 
-## Thiết kế
-- **CronJob** (trong cụm): mỗi 6h tự `etcdctl snapshot save` → ghi đè bản **latest** trên master tại `/var/backups/etcd/etcd-snapshot.db`. Tự động 100% (master luôn bật).
-- **Script PowerShell** (client Windows): kéo bản latest về ổ D, đặt tên theo **ngày** → giữ **history** nhiều bản. Off-cluster (Windows ít tắt hơn WSL).
-
-> Vì image etcd không có shell, CronJob chỉ ghi 1 bản "latest" trên master (không timestamp). History do client giữ.
-
----
-
-## Bước 1 — Apply CronJob (chạy 1 lần, từ WSL hoặc PowerShell có kubectl)
-
-```bash
-kubectl apply -f etcd-backup-cronjob.yaml
-kubectl -n kube-system get cronjob etcd-backup        # thấy SCHEDULE 0 */6 * * *
-```
-
-### Test chạy ngay (không đợi 6h) — tạo 1 job thủ công từ cronjob:
-```bash
-kubectl -n kube-system create job --from=cronjob/etcd-backup etcd-backup-manual-1
-kubectl -n kube-system get jobs                       # etcd-backup-manual-1 Complete
-kubectl -n kube-system logs job/etcd-backup-manual-1  # "Snapshot saved..."
-```
-
-### Verify file trên master:
-```bash
-kubectl -n kube-system exec etcd-yas-master -- \
-  etcdctl snapshot status /backup/etcd-snapshot.db --write-out=table 2>/dev/null \
-  || ssh root@100.98.171.67 "ls -lh /var/backups/etcd/"
-```
+## Vì sao cần CẢ HAI?
+- **etcd snapshot** = trạng thái cụm (pod-spec, svc, configmap, secret...).
+- **PKI (cert)** = chứng chỉ ký ServiceAccount token.
+- Restore vào master CŨ (cert còn): chỉ cần etcd. ✅
+- Restore vào master MỚI (init lại, cert mới): cần CẢ etcd + pki cũ → token cũ mới khớp cert cũ. Thiếu pki → SA token lệch → auth hỏng.
+- → Backup cả hai = restore được mọi tình huống (kể cả mất master).
 
 ---
 
-## Bước 2 — Script pull về client (PowerShell)
+## Trên cụm (tự động) — 2 CronJob
+
+```bash
+kubectl apply -f etcd-backup-cronjob.yaml   # etcd snapshot, image etcd, mỗi 6h
+kubectl apply -f pki-backup-cronjob.yaml    # pki.tgz, image busybox (có tar), mỗi 6h
+kubectl -n kube-system get cronjob          # thấy etcd-backup + pki-backup
+```
+
+Cả hai lưu vào `/var/backups/etcd/` trên master:
+- `etcd-snapshot.db` (~12MB)
+- `pki.tgz` (~vài chục KB)
+
+### Test chạy ngay (không đợi 6h):
+```bash
+kubectl -n kube-system create job --from=cronjob/etcd-backup etcd-test
+kubectl -n kube-system create job --from=cronjob/pki-backup  pki-test
+kubectl -n kube-system get jobs
+kubectl -n kube-system logs job/pki-test     # "PKI backup saved..."
+# kiểm file trên master:
+ssh -i ~/.ssh/id_auto root@100.98.171.67 "ls -lh /var/backups/etcd/"
+# dọn job test:
+kubectl -n kube-system delete job etcd-test pki-test
+```
+
+---
+
+## Pull off-cluster về máy (thủ công)
 
 ```powershell
-# chạy tay thử
-powershell -ExecutionPolicy Bypass -File backup-etcd-pull.ps1
+powershell -ExecutionPolicy Bypass -File backup-pull.ps1
 ```
-→ Ra file `etcd-snapshot-<ngày>.db` trong `D:\...\backups`.
+→ Kéo CẢ etcd-snapshot + pki về `D:\...\backups`, đặt tên theo ngày. Dùng `id_auto` nên không hỏi passphrase.
 
 ---
 
-## Bước 3 — Tự động hóa pull bằng Task Scheduler (KHÔNG set Expire)
+## Restore (quy trình tham khảo — ĐỪNG chạy trên cụm thật)
 
-1. Mở **Task Scheduler** (Windows) → **Create Task** (không phải Basic Task).
-2. **General:** đặt tên `etcd-backup-pull`. Tick "Run whether user is logged on or not".
-3. **Triggers:** New → Daily, hoặc "At log on" (chạy khi mở máy). *(KHÔNG tick Expire — sẽ xóa tay sau vấn đáp.)*
-4. **Actions:** New → Program: `powershell.exe`
-   Arguments: `-ExecutionPolicy Bypass -File "D:\...\backup-etcd-pull.ps1"`
-5. OK.
+### Vào master CŨ (cert còn) — chỉ etcd:
+```bash
+etcdutl snapshot restore etcd-snapshot.db --data-dir=/var/lib/etcd-new
+# dừng control-plane → thay /var/lib/etcd → khởi động lại
+```
+
+### Vào master MỚI (init lại) — cả pki + etcd:
+```bash
+# 1. Giải nén pki cũ ĐÈ vào trước khi/ngay sau init
+tar xzf pki-<date>.tgz -C /etc/kubernetes
+# 2. Restore etcd như trên
+# → token cũ khớp cert cũ → auth không lệch
+```
 
 ---
 
-## ⚠️ TEARDOWN — DỌN SAU VẤN ĐÁP (đừng quên!)
-
-| Tài nguyên | Lệnh / cách gỡ |
+## ⚠️ TEARDOWN sau vấn đáp
+| Tài nguyên | Gỡ |
 |---|---|
-| Task Scheduler `etcd-backup-pull` | Task Scheduler → chuột phải → **Delete** |
-| CronJob `etcd-backup` | `kubectl -n kube-system delete cronjob etcd-backup` (hoặc mất khi xóa cụm) |
-| **3 droplet DigitalOcean** | **Xóa trên DO console — KẺO TỐN CREDIT** |
-| **EC2 Jenkins agent** | Stop/Terminate trên AWS — KẺO TỐN TIỀN |
-| Tailscale | (free, giữ cũng được) hoặc gỡ máy khỏi tailnet |
+| CronJob etcd-backup + pki-backup | `kubectl -n kube-system delete cronjob etcd-backup pki-backup` |
+| Key id_auto trên droplet | xóa khỏi authorized_keys, hoặc xóa droplet |
+| **3 droplet + EC2** | **xóa — tốn tiền** |
 
-> Nhắc lại: **droplet + EC2** mới là cái tốn tiền. Task Scheduler/CronJob chỉ là rác nhẹ.
+## ⚠️ KHÔNG commit lên Git
+- File key `id_auto` (private key)
+- File `pki-*.tgz` (chứa CERT cụm — nhạy cảm!)
+- → Thêm `.gitignore`: `*id_auto*`, `*.tgz`, `*.db`, `pki-*`

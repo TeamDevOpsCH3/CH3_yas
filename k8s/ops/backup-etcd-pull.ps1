@@ -11,7 +11,7 @@ $LocalFile         = Join-Path $LocalDir "etcd-snapshot-$Date.db"
 if (!(Test-Path $LocalDir)) { New-Item -ItemType Directory -Path $LocalDir | Out-Null }
 
 Write-Host "[*] Pulling etcd snapshot from master ($MasterTailscaleIP)..."
-scp "root@${MasterTailscaleIP}:${RemoteFile}" "$LocalFile"
+scp -i $env:USERPROFILE\.ssh\id_auto "root@${MasterTailscaleIP}:${RemoteFile}" "$LocalFile"
 
 if (Test-Path $LocalFile) {
     $size = (Get-Item $LocalFile).Length / 1MB

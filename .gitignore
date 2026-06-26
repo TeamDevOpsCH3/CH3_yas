@@ -30,3 +30,8 @@ hs_err_pid*
 .vscode
 *.iml
 .DS_Store
+
+*id_auto*
+*.tgz
+*.db
+pki-*
