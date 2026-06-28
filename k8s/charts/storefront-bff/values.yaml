@@ -16,6 +16,8 @@ backend:
     path: /
 
   extraEnvs:
+    - name: JAVA_TOOL_OPTIONS
+      value: "-Dreactor.netty.dns.useNativeResolver=false"
     - name: SPRING_PROFILES_ACTIVE
       value: prod
     - name: UI_HOST
