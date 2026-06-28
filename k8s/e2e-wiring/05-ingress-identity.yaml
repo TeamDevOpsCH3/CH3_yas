@@ -1,0 +1,23 @@
+# Ingress cho Keycloak — host identity.yas.local.com.
+# DAY LA CAI THIEU ban dau: 3 ingress app co san nhung KHONG co ingress cho Keycloak
+# -> bam Login -> browser redirect toi identity.yas.local.com -> ERR_NAME_NOT_RESOLVED.
+# Dat o ns keycloak vi Ingress chi route toi Service CUNG namespace.
+# Service "identity" (Keycloak) listen port 80.
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: identity
+  namespace: keycloak
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: identity.yas.local.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: identity
+                port:
+                  number: 80

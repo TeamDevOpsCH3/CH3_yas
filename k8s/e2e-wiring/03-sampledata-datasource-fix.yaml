@@ -1,0 +1,24 @@
+# FIX silent-failure seed: sampledata co 2 datasource phu (product/media)
+# ngoai SPRING_DATASOURCE_URL chinh. cd-deploy.sh chi set datasource chinh -> _dev,
+# bo sot 2 cai nay -> seed ghi vao DB "product"/"media" (khong suffix) trong khi
+# app dev doc "product_dev"/"media_dev" -> UI "No Products" du seed bao "success".
+# Fix: them _dev vao 2 url duoi. (Ly tuong: dua vao Helm values yas-configuration)
+#
+# LUU Y: configmap nay do Helm chart yas-configuration quan ly. Apply de tay se bi
+# Helm upgrade ghi de. Cach ben: sua trong values cua chart, hoac re-apply + restart
+# sau moi helm upgrade. Xem README.md.
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: sampledata-application-configmap
+  namespace: dev
+  labels:
+    app.kubernetes.io/managed-by: Helm
+data:
+  sampledata-application.yaml: |2
+    spring:
+      datasource:
+        media:
+          url: jdbc:postgresql://postgresql.postgres:5432/media_dev
+        product:
+          url: jdbc:postgresql://postgresql.postgres:5432/product_dev
