@@ -1,0 +1,61 @@
+# Ingress cho 3 frontend dev — host .yas.local.com (khop config bff: issuer/media/payment).
+# Route qua ingress-nginx controller (port 80 tren master, xem 06-setup).
+# Luu y: 3 ingress nay goc do Helm (backend chart) tao voi host .dev.yas.local.com;
+# da patch host -> .yas.local.com cho khop config bff. Helm upgrade co the reset host.
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: storefront-bff
+  namespace: dev
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: storefront.yas.local.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: storefront-bff
+                port:
+                  number: 80
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: backoffice-bff
+  namespace: dev
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: backoffice.yas.local.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: backoffice-bff
+                port:
+                  number: 80
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: swagger-ui
+  namespace: dev
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: api.yas.local.com
+      http:
+        paths:
+          - path: /swagger-ui
+            pathType: ImplementationSpecific
+            backend:
+              service:
+                name: swagger-ui
+                port:
+                  number: 8080

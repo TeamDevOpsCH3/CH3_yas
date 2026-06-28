@@ -1,0 +1,72 @@
+# nginx API gateway — bù lại con "nginx" reverse-proxy của docker-compose mà K8s thiếu.
+# storefront-bff/backoffice-bff route /api/** -> http://nginx -> fan-out tới product/cart/...
+# Không có con này: bff gọi "nginx" -> NXDOMAIN -> 500 -> UI "No Products".
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: nginx
+  namespace: dev
+  labels:
+    app: nginx-gateway
+    purpose: api-gateway-compat
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: nginx-gateway
+  template:
+    metadata:
+      labels:
+        app: nginx-gateway
+    spec:
+      affinity:
+        nodeAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              preference:
+                matchExpressions:
+                  - key: node-type
+                    operator: In
+                    values: ["cloud"]
+      containers:
+        - name: nginx
+          image: nginx:1.27.2
+          ports:
+            - containerPort: 80
+          volumeMounts:
+            - name: templates
+              mountPath: /etc/nginx/templates
+            - name: custom-conf
+              mountPath: /etc/nginx/conf.d/custom_proxy_settings.conf
+              subPath: custom_proxy_settings.conf
+          resources:
+            requests: { memory: "32Mi", cpu: "20m" }
+            limits:   { memory: "128Mi", cpu: "200m" }
+      volumes:
+        - name: templates
+          configMap:
+            name: nginx-gateway-conf
+            items:
+              - key: default.conf.template
+                path: default.conf.template
+        - name: custom-conf
+          configMap:
+            name: nginx-gateway-conf
+            items:
+              - key: custom_proxy_settings.conf
+                path: custom_proxy_settings.conf
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: nginx
+  namespace: dev
+  labels:
+    app: nginx-gateway
+spec:
+  selector:
+    app: nginx-gateway
+  ports:
+    - name: http
+      port: 80
+      targetPort: 80
