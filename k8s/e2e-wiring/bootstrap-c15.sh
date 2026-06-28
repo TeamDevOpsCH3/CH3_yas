@@ -24,7 +24,7 @@ warn() { echo -e "${c_yellow}[!]${c_reset} $*"; }
 err()  { echo -e "${c_red}[x]${c_reset} $*" >&2; }
 
 # --- 0. Pre-check: cụm sống + ns dev có app ---
-log "[0/6] Pre-check cụm + ns dev"
+log "[0/7] Pre-check cụm + ns dev"
 if ! kubectl get nodes >/dev/null 2>&1; then
   err "Không kết nối được cụm (kubectl get nodes fail). Rebuild cụm trước."
   exit 1
@@ -37,7 +37,7 @@ ready=$(kubectl -n dev get pods --no-headers 2>/dev/null | grep -c "Running" || 
 log "ns dev: $ready pod Running"
 
 # --- 1. Cài ingress-nginx controller (idempotent) ---
-log "[1/6] Cài ingress-nginx controller ($INGRESS_VERSION)"
+log "[1/7] Cài ingress-nginx controller ($INGRESS_VERSION)"
 if kubectl -n ingress-nginx get deploy ingress-nginx-controller >/dev/null 2>&1; then
   warn "Controller đã tồn tại — bỏ qua cài mới."
 else
@@ -47,7 +47,7 @@ else
 fi
 
 # --- 2. Pin controller về master (hostPort 80/443 đã có sẵn trong manifest baremetal) ---
-log "[2/6] Pin controller về $MASTER_NODE (cho hostPort 80 ổn định)"
+log "[2/7] Pin controller về $MASTER_NODE (cho hostPort 80 ổn định)"
 current_selector=$(kubectl -n ingress-nginx get deploy ingress-nginx-controller \
   -o jsonpath='{.spec.template.spec.nodeSelector.kubernetes\.io/hostname}' 2>/dev/null || true)
 if [ "$current_selector" = "$MASTER_NODE" ]; then
@@ -62,7 +62,27 @@ log "Đợi controller Running 1/1 trên $MASTER_NODE..."
 kubectl -n ingress-nginx rollout status deploy/ingress-nginx-controller --timeout=120s
 
 # --- 3. Apply bộ wiring (gọi lại apply-all.sh đã có) ---
-log "[3/6] Apply E2E wiring (nginx gateway + ingress + sampledata fix)"
+
+log "[3/7] CoreDNS rewrite cho SSR (*.yas.local.com -> service noi bo)"
+if kubectl -n kube-system get configmap coredns -o jsonpath='{.data.Corefile}' \
+     | grep -q 'rewrite name storefront.yas.local.com'; then
+  warn "CoreDNS rewrite storefront da co - bo qua."
+else
+  log "Them rewrite vao CoreDNS (backup truoc)"
+  kubectl -n kube-system get configmap coredns -o yaml > "/tmp/coredns-backup-$(date +%s).yaml"
+  kubectl -n kube-system get configmap coredns -o jsonpath='{.data.Corefile}' > /tmp/Corefile.cur
+  if grep -q 'rewrite name identity.yas.local.com' /tmp/Corefile.cur; then
+    sed -i '/rewrite name identity.yas.local.com/a\        rewrite name storefront.yas.local.com storefront-bff.dev.svc.cluster.local\n        rewrite name backoffice.yas.local.com backoffice-bff.dev.svc.cluster.local\n        rewrite name api.yas.local.com swagger-ui.dev.svc.cluster.local' /tmp/Corefile.cur
+  else
+    sed -i '/ready/a\        rewrite name identity.yas.local.com identity.keycloak.svc.cluster.local\n        rewrite name storefront.yas.local.com storefront-bff.dev.svc.cluster.local\n        rewrite name backoffice.yas.local.com backoffice-bff.dev.svc.cluster.local\n        rewrite name api.yas.local.com swagger-ui.dev.svc.cluster.local' /tmp/Corefile.cur
+  fi
+  kubectl -n kube-system create configmap coredns --from-file=Corefile=/tmp/Corefile.cur --dry-run=client -o yaml | kubectl apply -f -
+  kubectl -n kube-system rollout restart deploy/coredns
+  kubectl -n kube-system rollout status deploy/coredns --timeout=60s
+  log "CoreDNS rewrite applied"
+fi
+
+log "[4/7] Apply E2E wiring (nginx gateway + ingress + sampledata fix)"
 if [ -x "$SCRIPT_DIR/apply-all.sh" ]; then
   "$SCRIPT_DIR/apply-all.sh"
 else
@@ -77,7 +97,7 @@ else
 fi
 
 # --- 4. Đợi sampledata sẵn sàng rồi seed ---
-log "[4/6] Đợi sampledata Ready rồi seed data"
+log "[5/7] Đợi sampledata Ready rồi seed data"
 kubectl -n dev rollout status deploy/sampledata --timeout=90s
 sleep 3
 seed_resp=$(kubectl -n dev run seedtest-$$ --image=curlimages/curl --rm -i --restart=Never -- \
@@ -86,7 +106,7 @@ seed_resp=$(kubectl -n dev run seedtest-$$ --image=curlimages/curl --rm -i --res
 log "Seed response: $seed_resp"
 
 # --- 5. Verify data vào ĐÚNG DB _dev ---
-log "[5/6] Verify product_dev có data"
+log "[6/7] Verify product_dev có data"
 PGPW=$(kubectl -n postgres get secret postgresql -o jsonpath='{.data.postgres-password}' | base64 -d)
 pcount=$(kubectl -n postgres exec statefulset/postgresql -- env PGPASSWORD="$PGPW" \
   psql -U postgres -d product_dev -tAc "SELECT count(*) FROM product;" 2>/dev/null | tr -d '[:space:]' || echo "?")
@@ -98,7 +118,7 @@ if [ "$pcount" = "0" ] || [ "$pcount" = "?" ]; then
 fi
 
 # --- 6. Verify ingress trả lời port 80 ---
-log "[6/6] Verify ingress port 80 (Keycloak discovery)"
+log "[7/7] Verify ingress port 80 (Keycloak discovery)"
 code=$(kubectl -n dev run httptest-$$ --image=curlimages/curl --rm -i --restart=Never -- \
   curl -s -o /dev/null -w "%{http_code}" -H "Host: identity.yas.local.com" \
   "http://$MASTER_IP/realms/Yas/.well-known/openid-configuration" 2>/dev/null || echo "000")
