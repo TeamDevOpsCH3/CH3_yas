@@ -1,58 +1,10 @@
-# ConfigMap config cho nginx gateway (01-nginx-gateway.yaml).
-# 2 fix so với template gốc docker-compose:
-#  1) resolver 127.0.0.11 (docker DNS) -> 10.96.0.10 (CoreDNS K8s)
-#  2) proxy_pass http://<svc> -> FQDN http://<svc>.dev.svc.cluster.local
-#     (vì nginx resolver KHONG dung search-domain, tên ngắn -> NXDOMAIN -> 502)
+# nginx gateway config — proxy_pass dùng FQDN (fix NXDOMAIN cho route dùng biến)
+# search/webhook/recommendation -> .dev.svc; elasticsearch -> .elasticsearch.svc; grafana -> .observability.svc
 apiVersion: v1
-data:
-  custom_proxy_settings.conf: client_max_body_size 30m;
-  default.conf.template: "server {\r\n  server_name api.yas.local;\r\n\r\n  # Docker
-    DNS\r\n  resolver 10.96.0.10 valid=10s;\r\n\r\n  location /media/ {\r\n    set
-    $up_8 \"media.dev.svc.cluster.local\";\n    proxy_pass http://$up_8;\n  }\r\n
-    \ location /swagger-ui/ {\r\n    set $up_11 \"swagger-ui.dev.svc.cluster.local:8080\";\n
-    \   proxy_pass http://$up_11;\n  }\r\n  location /product/ {\r\n    set $up_14
-    \"product.dev.svc.cluster.local\";\n    proxy_pass http://$up_14;\n  }\r\n  location
-    /customer/ {\r\n    set $up_17 \"customer.dev.svc.cluster.local\";\n    proxy_pass
-    http://$up_17;\n  }\r\n  location /cart/ {\r\n    set $up_20 \"cart.dev.svc.cluster.local\";\n
-    \   proxy_pass http://$up_20;\n  }\r\n  location /rating/ {\r\n    set $up_23
-    \"rating.dev.svc.cluster.local\";\n    proxy_pass http://$up_23;\n  }\r\n  location
-    /order/ {\r\n    set $up_26 \"order.dev.svc.cluster.local\";\n    proxy_pass http://$up_26;\n
-    \ }\r\n  location /location/ {\r\n    set $up_29 \"location.dev.svc.cluster.local\";\n
-    \   proxy_pass http://$up_29;\n  }\r\n  location /inventory/ {\r\n    set $up_32
-    \"inventory.dev.svc.cluster.local\";\n    proxy_pass http://$up_32;\n  }\r\n  location
-    /tax/ {\r\n    set $up_35 \"tax.dev.svc.cluster.local\";\n    proxy_pass http://$up_35;\n
-    \ }\r\n  location /promotion/ {\r\n    set $up_38 \"promotion.dev.svc.cluster.local\";\n
-    \   proxy_pass http://$up_38;\n  }\r\n  location /search/ {\r\n    #hack to prevent
-    nginx to resolve container's host on start up\r\n    set $docker_search_host \"search\";\r\n
-    \   proxy_pass http://$docker_search_host;\r\n  }\r\n  location /payment/ {\r\n
-    \   set $up_46 \"payment.dev.svc.cluster.local\";\n    proxy_pass http://$up_46;\n
-    \ }\r\n  location /webhook/ {\r\n    set $docker_webhook_host \"webhook\";\r\n
-    \   proxy_pass http://$docker_webhook_host;\r\n  }\r\n  location /sampledata/
-    {\r\n    set $up_53 \"sampledata.dev.svc.cluster.local\";\n    proxy_pass http://$up_53;\n
-    \ }\r\n  location /recommendation/ {\r\n    set $docker_recommendation_host \"recommendation\";\r\n
-    \   proxy_pass http://$docker_recommendation_host;\r\n  }\r\n}\r\n\r\nserver {\r\n
-    \ server_name backoffice;\r\n  location / {\r\n    set $up_64 \"backoffice.dev.svc.cluster.local\";\n
-    \   proxy_pass http://$up_64;\n  }\r\n}\r\n\r\nserver {\r\n  server_name storefront;\r\n
-    \ location / {\r\n    set $up_71 \"storefront.dev.svc.cluster.local\";\n    proxy_pass
-    http://$up_71;\n  }\r\n}\r\n\r\nserver {\r\n  server_name pgadmin.yas.local;\r\n
-    \ location / {\r\n    set $up_78 \"pgadmin.dev.svc.cluster.local\";\n    proxy_pass
-    http://$up_78;\n  }\r\n}\r\n\r\nserver {\r\n  server_name identity;\r\n  large_client_header_buffers
-    8 32k;\r\n  location / {\r\n    set $up_86 \"identity.dev.svc.cluster.local\";\n
-    \   proxy_pass http://$up_86;\n    proxy_set_header Host $host;\r\n    proxy_set_header
-    X-Real-IP $remote_addr;\r\n    proxy_set_header X-Forwarded-Proto $scheme;\r\n
-    \   proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\r\n\r\n    #
-    Workaround to void CORS error from Reactjs\r\n    if ($uri ~ \"^(.*)/(protocol/openid-connect/auth|login/oauth2/code)(.*)\")
-    {\r\n    \tadd_header Access-Control-Allow-Origin *;\r\n    }\r\n  }\r\n}\r\n\r\nserver
-    {\r\n  server_name grafana;\r\n\r\n  resolver 10.96.0.10 valid=10s;\r\n\r\n  location
-    / {\r\n    set $docker_grafana_host \"grafana\";\r\n    proxy_pass http://$docker_grafana_host:3000;\r\n
-    \ }\r\n}\r\n\r\nserver {\r\n  server_name elasticsearch;\r\n\r\n  resolver 10.96.0.10
-    valid=10s;\r\n\r\n  location / {\r\n    set $docker_elasticsearch_host \"elasticsearch\";\r\n
-    \   proxy_pass http://$docker_elasticsearch_host:9200;\r\n  }\r\n}\r\n\r\nserver
-    {\r\n  server_name kafka;\r\n\r\n  resolver 10.96.0.10 valid=10s;\r\n\r\n  location
-    / {\r\n    set $up_127 \"kafka.dev.svc.cluster.local:9092\";\n    proxy_pass http://$up_127;\n
-    \ }\r\n}\n"
 kind: ConfigMap
 metadata:
-  creationTimestamp: null
   name: nginx-gateway-conf
   namespace: dev
+data:
+  custom_proxy_settings.conf: client_max_body_size 30m;
+  default.conf.template: "server {\r\n  server_name api.yas.local;\r\n\r\n  # Docker DNS\r\n  resolver 10.96.0.10 valid=10s;\r\n\r\n  location /media/ {\r\n    set $up_8 \"media.dev.svc.cluster.local\";\n    proxy_pass http://$up_8;\n  }\r\n  location /swagger-ui/ {\r\n    set $up_11 \"swagger-ui.dev.svc.cluster.local:8080\";\n    proxy_pass http://$up_11;\n  }\r\n  location /product/ {\r\n    set $up_14 \"product.dev.svc.cluster.local\";\n    proxy_pass http://$up_14;\n  }\r\n  location /customer/ {\r\n    set $up_17 \"customer.dev.svc.cluster.local\";\n    proxy_pass http://$up_17;\n  }\r\n  location /cart/ {\r\n    set $up_20 \"cart.dev.svc.cluster.local\";\n    proxy_pass http://$up_20;\n  }\r\n  location /rating/ {\r\n    set $up_23 \"rating.dev.svc.cluster.local\";\n    proxy_pass http://$up_23;\n  }\r\n  location /order/ {\r\n    set $up_26 \"order.dev.svc.cluster.local\";\n    proxy_pass http://$up_26;\n  }\r\n  location /location/ {\r\n    set $up_29 \"location.dev.svc.cluster.local\";\n    proxy_pass http://$up_29;\n  }\r\n  location /inventory/ {\r\n    set $up_32 \"inventory.dev.svc.cluster.local\";\n    proxy_pass http://$up_32;\n  }\r\n  location /tax/ {\r\n    set $up_35 \"tax.dev.svc.cluster.local\";\n    proxy_pass http://$up_35;\n  }\r\n  location /promotion/ {\r\n    set $up_38 \"promotion.dev.svc.cluster.local\";\n    proxy_pass http://$up_38;\n  }\r\n  location /search/ {\r\n    #hack to prevent nginx to resolve container's host on start up\r\n    set $docker_search_host \"search.dev.svc.cluster.local\";\r\n    proxy_pass http://$docker_search_host;\r\n  }\r\n  location /payment/ {\r\n    set $up_46 \"payment.dev.svc.cluster.local\";\n    proxy_pass http://$up_46;\n  }\r\n  location /webhook/ {\r\n    set $docker_webhook_host \"webhook.dev.svc.cluster.local\";\r\n    proxy_pass http://$docker_webhook_host;\r\n  }\r\n  location /sampledata/ {\r\n    set $up_53 \"sampledata.dev.svc.cluster.local\";\n    proxy_pass http://$up_53;\n  }\r\n  location /recommendation/ {\r\n    set $docker_recommendation_host \"recommendation.dev.svc.cluster.local\";\r\n    proxy_pass http://$docker_recommendation_host;\r\n  }\r\n}\r\n\r\nserver {\r\n  server_name backoffice;\r\n  location / {\r\n    set $up_64 \"backoffice.dev.svc.cluster.local\";\n    proxy_pass http://$up_64;\n  }\r\n}\r\n\r\nserver {\r\n  server_name storefront;\r\n  location / {\r\n    set $up_71 \"storefront.dev.svc.cluster.local\";\n    proxy_pass http://$up_71;\n  }\r\n}\r\n\r\nserver {\r\n  server_name pgadmin.yas.local;\r\n  location / {\r\n    set $up_78 \"pgadmin.dev.svc.cluster.local\";\n    proxy_pass http://$up_78;\n  }\r\n}\r\n\r\nserver {\r\n  server_name identity;\r\n  large_client_header_buffers 8 32k;\r\n  location / {\r\n    set $up_86 \"identity.dev.svc.cluster.local\";\n    proxy_pass http://$up_86;\n    proxy_set_header Host $host;\r\n    proxy_set_header X-Real-IP $remote_addr;\r\n    proxy_set_header X-Forwarded-Proto $scheme;\r\n    proxy_set_header X-Forwarded-For $proxy_add_x_forwarded_for;\r\n\r\n    # Workaround to void CORS error from Reactjs\r\n    if ($uri ~ \"^(.*)/(protocol/openid-connect/auth|login/oauth2/code)(.*)\") {\r\n    \tadd_header Access-Control-Allow-Origin *;\r\n    }\r\n  }\r\n}\r\n\r\nserver {\r\n  server_name grafana;\r\n\r\n  resolver 10.96.0.10 valid=10s;\r\n\r\n  location / {\r\n    set $docker_grafana_host \"grafana.observability.svc.cluster.local\";\r\n    proxy_pass http://$docker_grafana_host:3000;\r\n  }\r\n}\r\n\r\nserver {\r\n  server_name elasticsearch;\r\n\r\n  resolver 10.96.0.10 valid=10s;\r\n\r\n  location / {\r\n    set $docker_elasticsearch_host \"elasticsearch.elasticsearch.svc.cluster.local\";\r\n    proxy_pass http://$docker_elasticsearch_host:9200;\r\n  }\r\n}\r\n\r\nserver {\r\n  server_name kafka;\r\n\r\n  resolver 10.96.0.10 valid=10s;\r\n\r\n  location / {\r\n    set $up_127 \"kafka.dev.svc.cluster.local:9092\";\n    proxy_pass http://$up_127;\n  }\r\n}\n"
