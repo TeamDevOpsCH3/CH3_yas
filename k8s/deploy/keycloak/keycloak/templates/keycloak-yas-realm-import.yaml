@@ -529,7 +529,8 @@ spec:
           - {{ .Values.backofficeRedirectUrl }}/*
           - http://localhost:3000/*
           - http://localhost:8087/*
-        webOrigins: [ ]
+        webOrigins:
+          - {{ .Values.backofficeRedirectUrl }}
         notBefore: 0
         bearerOnly: false
         consentRequired: false
@@ -822,7 +823,8 @@ spec:
         redirectUris:
           - {{ .Values.storefrontRedirectUrl }}/*
           - http://localhost:8087/*
-        webOrigins: [ ]
+        webOrigins:
+          - {{ .Values.storefrontRedirectUrl }}
         notBefore: 0
         bearerOnly: false
         consentRequired: false
