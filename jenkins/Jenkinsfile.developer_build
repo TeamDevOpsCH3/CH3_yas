@@ -1,0 +1,424 @@
+pipeline {
+  agent { label 'build-agent' }
+
+  parameters {
+    choice(
+      name: 'SERVICE',
+      choices: [
+        'cart',
+        'product',
+        'customer',
+        'inventory',
+        'media',
+        'order',
+        'search',
+        'storefront-bff',
+        'backoffice-bff',
+        'tax',
+        'sampledata',
+        'storefront-ui',
+        'backoffice-ui'
+      ],
+      description: 'Service cần deploy preview'
+    )
+
+    string(
+      name: 'BRANCH',
+      defaultValue: 'develop',
+      description: 'Branch cần test'
+    )
+
+    string(
+      name: 'TASK_ID',
+      defaultValue: 'fixcart',
+      description: 'Tên namespace tạm, ví dụ fixcart -> dev-fixcart'
+    )
+
+    string(
+      name: 'IMAGE_TAG_OVERRIDE',
+      defaultValue: '',
+      description: 'dùng tag image có sẵn. Để trống thì dùng SHA của BRANCH.'
+    )
+
+    string(
+      name: 'NODE_IP',
+      defaultValue: '100.98.171.67',
+      description: 'Tailscale IP của node Ready để test NodePort'
+    )
+
+    booleanParam(
+      name: 'CLEAN_BEFORE_DEPLOY',
+      defaultValue: true,
+      description: 'Xóa namespace cũ trước khi deploy'
+    )
+  }
+
+  environment {
+    REPO_URL = 'https://github.com/TeamDevOpsCH3/CH3_yas.git'
+    DOCKER_REGISTRY = 'docker.io'
+    DOCKER_ORG = 'methylch3'
+  }
+
+  stages {
+    stage('Preflight') {
+      steps {
+        withCredentials([
+          file(credentialsId: 'kubeconfig-cred', variable: 'KUBECONFIG')
+        ]) {
+          sh '''
+            set -e
+            export PATH="$HOME/bin:$PATH"
+
+            if [ -z "$SERVICE" ] || [ -z "$BRANCH" ] || [ -z "$TASK_ID" ]; then
+              echo "Missing SERVICE / BRANCH / TASK_ID"
+              exit 1
+            fi
+
+            if ! echo "$TASK_ID" | grep -Eq '^[a-z0-9-]+$'; then
+              echo "TASK_ID chỉ được gồm chữ thường, số và dấu -"
+              exit 1
+            fi
+
+            kubectl get ns dev >/dev/null
+            kubectl get nodes
+            helm version
+            docker version
+          '''
+        }
+      }
+    }
+
+    stage('Checkout And Resolve Image') {
+      steps {
+        deleteDir()
+
+        git branch: "${params.BRANCH}",
+            url: "${env.REPO_URL}"
+
+        sh '''
+          set -e
+          export PATH="$HOME/bin:$PATH"
+
+          BRANCH_SHA=$(git rev-parse --short=12 HEAD)
+
+          case "$SERVICE" in
+            storefront-ui)
+              IMAGE_SERVICE="storefront"
+              ;;
+            backoffice-ui)
+              IMAGE_SERVICE="backoffice"
+              ;;
+            *)
+              IMAGE_SERVICE="$SERVICE"
+              ;;
+          esac
+
+          if [ -n "$IMAGE_TAG_OVERRIDE" ]; then
+            IMAGE_TAG="$IMAGE_TAG_OVERRIDE"
+          else
+            IMAGE_TAG="$BRANCH_SHA"
+          fi
+
+          IMAGE="$DOCKER_REGISTRY/$DOCKER_ORG/yas-${IMAGE_SERVICE}:${IMAGE_TAG}"
+
+          docker manifest inspect "$IMAGE" >/dev/null
+
+          echo "$BRANCH_SHA" > .branch_sha
+          echo "$IMAGE_TAG" > .image_tag
+          echo "$IMAGE_SERVICE" > .image_service
+
+          echo "IMAGE=$IMAGE"
+        '''
+      }
+    }
+
+    stage('Resolve Chart Config') {
+      steps {
+        sh '''
+          set -e
+
+          if [ -d "./k8s/charts/yas-configuration" ]; then
+            CHART_ROOT="./k8s/charts"
+          elif [ -d "./charts/yas-configuration" ]; then
+            CHART_ROOT="./charts"
+          elif [ -d "./deployment/charts/yas-configuration" ]; then
+            CHART_ROOT="./deployment/charts"
+          else
+            echo "Không tìm thấy chart yas-configuration"
+            exit 1
+          fi
+
+          if [ ! -d "$CHART_ROOT/$SERVICE" ]; then
+            echo "Không tìm thấy chart: $CHART_ROOT/$SERVICE"
+            exit 1
+          fi
+
+          case "$SERVICE" in
+            storefront-ui|backoffice-ui)
+              FAMILY="ui"
+              SERVICE_PORT="3000"
+              TARGET_PORT="3000"
+              ;;
+            *)
+              FAMILY="backend"
+              SERVICE_PORT="80"
+              TARGET_PORT="8090"
+              ;;
+          esac
+
+          echo "$CHART_ROOT" > .chart_root
+          echo "$FAMILY" > .family
+          echo "$SERVICE_PORT" > .service_port
+          echo "$TARGET_PORT" > .target_port
+        '''
+      }
+    }
+
+    stage('Cleanup Namespace') {
+      when {
+        expression { return params.CLEAN_BEFORE_DEPLOY == true }
+      }
+      steps {
+        withCredentials([
+          file(credentialsId: 'kubeconfig-cred', variable: 'KUBECONFIG')
+        ]) {
+          sh '''
+            set -e
+            export PATH="$HOME/bin:$PATH"
+
+            NS="dev-$TASK_ID"
+
+            kubectl delete ns "$NS" --ignore-not-found=true
+
+            while kubectl get ns "$NS" >/dev/null 2>&1; do
+              sleep 3
+            done
+          '''
+        }
+      }
+    }
+
+    stage('Prepare Namespace') {
+      steps {
+        withCredentials([
+          file(credentialsId: 'kubeconfig-cred', variable: 'KUBECONFIG')
+        ]) {
+          sh '''
+            set -e
+            export PATH="$HOME/bin:$PATH"
+
+            NS="dev-$TASK_ID"
+
+            kubectl create ns "$NS" --dry-run=client -o yaml | kubectl apply -f -
+
+            kubectl label ns "$NS" yas.ephemeral="$TASK_ID" --overwrite
+            kubectl label ns "$NS" yas.owner=developer-build --overwrite
+            kubectl label ns "$NS" yas.service="$SERVICE" --overwrite
+            kubectl label ns "$NS" yas.branch="$BRANCH" --overwrite
+
+            cat <<EOF | kubectl apply -f -
+apiVersion: v1
+kind: LimitRange
+metadata:
+  name: default-limits
+  namespace: ${NS}
+spec:
+  limits:
+    - type: Container
+      defaultRequest:
+        memory: 256Mi
+      default:
+        memory: 768Mi
+EOF
+
+            cat <<EOF | kubectl apply -f -
+apiVersion: v1
+kind: ResourceQuota
+metadata:
+  name: cap
+  namespace: ${NS}
+spec:
+  hard:
+    requests.memory: 2Gi
+    limits.memory: 3Gi
+    pods: "4"
+EOF
+          '''
+        }
+      }
+    }
+
+    stage('Build Helm Dependencies') {
+      steps {
+        withCredentials([
+          file(credentialsId: 'kubeconfig-cred', variable: 'KUBECONFIG')
+        ]) {
+          sh '''
+            set -e
+            export PATH="$HOME/bin:$PATH"
+
+            CHART_ROOT=$(cat .chart_root)
+
+            helm dependency build "$CHART_ROOT/yas-configuration"
+            helm dependency build "$CHART_ROOT/$SERVICE" || true
+          '''
+        }
+      }
+    }
+
+    stage('Install Configuration') {
+      steps {
+        withCredentials([
+          file(credentialsId: 'kubeconfig-cred', variable: 'KUBECONFIG')
+        ]) {
+          sh '''
+            set -e
+            export PATH="$HOME/bin:$PATH"
+
+            NS="dev-$TASK_ID"
+            CHART_ROOT=$(cat .chart_root)
+
+            helm upgrade --install yas-configuration "$CHART_ROOT/yas-configuration" -n "$NS" \
+              --set yas.services.product=http://product.dev/product \
+              --set yas.services.cart=http://cart.dev/cart \
+              --set yas.services.order=http://order.dev/order \
+              --set yas.services.tax=http://tax.dev/tax \
+              --set yas.services.customer=http://customer.dev/customer \
+              --set yas.services.inventory=http://inventory.dev/inventory \
+              --set yas.services.media=http://media.dev/media \
+              --set yas.services.search=http://search.dev/search \
+              --set yas.services.sampledata=http://sampledata.dev/sampledata \
+              --set yas.services.storefrontBff=http://storefront-bff.dev \
+              --set yas.services.backofficeBff=http://backoffice-bff.dev
+
+            kubectl -n "$NS" scale deploy/yas-reloader --replicas=0 || true
+          '''
+        }
+      }
+    }
+
+    stage('Deploy Service') {
+      steps {
+        withCredentials([
+          file(credentialsId: 'kubeconfig-cred', variable: 'KUBECONFIG')
+        ]) {
+          sh '''
+            set -e
+            export PATH="$HOME/bin:$PATH"
+
+            NS="dev-$TASK_ID"
+            CHART_ROOT=$(cat .chart_root)
+            FAMILY=$(cat .family)
+            IMAGE_TAG=$(cat .image_tag)
+            IMAGE_SERVICE=$(cat .image_service)
+            IMAGE_REPO="$DOCKER_REGISTRY/$DOCKER_ORG/yas-$IMAGE_SERVICE"
+
+            if [ "$FAMILY" = "backend" ]; then
+              helm upgrade --install "$SERVICE" "$CHART_ROOT/$SERVICE" -n "$NS" \
+                --set backend.image.repository="$IMAGE_REPO" \
+                --set backend.image.tag="$IMAGE_TAG" \
+                --set backend.serviceMonitor.enabled=false \
+                --set backend.databaseName="${SERVICE}_dev" \
+                --set 'backend.extraEnvs[0].name=SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE' \
+                --set-string 'backend.extraEnvs[0].value=5'
+            else
+              helm upgrade --install "$SERVICE" "$CHART_ROOT/$SERVICE" -n "$NS" \
+                --set ui.image.repository="$IMAGE_REPO" \
+                --set ui.image.tag="$IMAGE_TAG" \
+                --set ui.serviceMonitor.enabled=false
+            fi
+          '''
+        }
+      }
+    }
+
+    stage('Verify Rollout') {
+      steps {
+        withCredentials([
+          file(credentialsId: 'kubeconfig-cred', variable: 'KUBECONFIG')
+        ]) {
+          sh '''
+            set -e
+            export PATH="$HOME/bin:$PATH"
+
+            NS="dev-$TASK_ID"
+            IMAGE_TAG=$(cat .image_tag)
+
+            if ! kubectl -n "$NS" rollout status "deploy/$SERVICE" --timeout=180s; then
+              kubectl -n "$NS" get pods -o wide || true
+              kubectl -n "$NS" describe pods || true
+              kubectl -n "$NS" logs deploy/"$SERVICE" --all-containers --tail=120 || true
+              kubectl -n "$NS" get events --sort-by=.lastTimestamp || true
+              exit 1
+            fi
+
+            RUNNING_IMAGE=$(kubectl -n "$NS" get deploy "$SERVICE" -o jsonpath='{.spec.template.spec.containers[0].image}')
+            echo "$RUNNING_IMAGE" | grep "$IMAGE_TAG"
+
+            POD_COUNT=$(kubectl -n "$NS" get pods --no-headers | wc -l | tr -d ' ')
+            if [ "$POD_COUNT" -gt 2 ]; then
+              echo "Namespace có quá nhiều pod"
+              kubectl -n "$NS" get pods
+              exit 1
+            fi
+          '''
+        }
+      }
+    }
+
+    stage('Expose NodePort') {
+      steps {
+        withCredentials([
+          file(credentialsId: 'kubeconfig-cred', variable: 'KUBECONFIG')
+        ]) {
+          sh '''
+            set -e
+            export PATH="$HOME/bin:$PATH"
+
+            NS="dev-$TASK_ID"
+            IMAGE_TAG=$(cat .image_tag)
+            IMAGE_SERVICE=$(cat .image_service)
+            FAMILY=$(cat .family)
+            SERVICE_PORT=$(cat .service_port)
+            TARGET_PORT=$(cat .target_port)
+
+            kubectl -n "$NS" delete svc "${SERVICE}-np" --ignore-not-found=true
+
+            kubectl -n "$NS" expose deploy "$SERVICE" \
+              --type=NodePort \
+              --name="${SERVICE}-np" \
+              --port="$SERVICE_PORT" \
+              --target-port="$TARGET_PORT"
+
+            NODE_PORT=$(kubectl -n "$NS" get svc "${SERVICE}-np" -o jsonpath='{.spec.ports[0].nodePort}')
+
+            if [ "$FAMILY" = "backend" ]; then
+              curl -i --max-time 10 "http://$NODE_IP:$NODE_PORT/actuator/health" || true
+            else
+              curl -i --max-time 10 "http://$NODE_IP:$NODE_PORT" || true
+            fi
+
+            echo ""
+            echo "C16 Developer Preview Ready"
+            echo "Namespace : $NS"
+            echo "Service   : $SERVICE"
+            echo "Image     : $DOCKER_REGISTRY/$DOCKER_ORG/yas-$IMAGE_SERVICE:$IMAGE_TAG"
+            echo "NodePort  : $NODE_PORT"
+            echo "URL       : http://$NODE_IP:$NODE_PORT"
+            echo "Hosts     : $NODE_IP ${SERVICE}-${TASK_ID}.local"
+          '''
+        }
+      }
+    }
+  }
+
+  post {
+    success {
+      echo "developer_build completed"
+    }
+
+    failure {
+      echo "developer_build failed"
+    }
+  }
+}
