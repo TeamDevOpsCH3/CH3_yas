@@ -1,40 +1,36 @@
 #!/usr/bin/env bash
-# =============================================================================
-# deploy-yas-configuration.sh — Cài yas-configuration (ConfigMap+Secret dùng
-# chung) vào namespace theo env. Methyl CH3 — YAS CD (C12+C18).
-# Chạy TRƯỚC deploy-yas-applications.sh (app cần config sẵn).
-# -----------------------------------------------------------------------------
-# Cách dùng (từ thư mục k8s/deploy/):
-#   ./deploy-yas-configuration.sh <env>     # env = baseline | dev | staging
+# deploy-yas-configuration.sh — Deploy yas-configuration chart (ConfigMap + Secret)
+# into the target namespace. Must run BEFORE deploy-yas-applications.sh.
 #
-# Mỗi ns app cần 1 bản yas-configuration; endpoint hạ tầng trong đó trỏ
-# cross-namespace (postgresql.postgres, kafka-cluster-kafka-brokers.kafka, ...).
-# =============================================================================
+# Usage (from k8s/deploy/):
+#   ./deploy-yas-configuration.sh <env>   env = baseline | dev | staging
+#
+# Dry-run (render only, no apply):
+#   DRY_RUN=1 ./deploy-yas-configuration.sh baseline
 set -euo pipefail
 
-ENV="${1:?Thiếu env. Dùng: baseline | dev | staging}"
+ENV="${1:?Missing env. Usage: baseline | dev | staging}"
 CHARTS="${CHARTS:-../charts}"
 
 case "$ENV" in
   baseline) NS="yas";;
   dev)      NS="dev";;
   staging)  NS="staging";;
-  *) echo "❌ env phải là baseline | dev | staging"; exit 1;;
+  *) echo "ERROR: env must be baseline | dev | staging"; exit 1;;
 esac
 
 DRY="${DRY_RUN:-0}"
-echo "▶  yas-configuration -> ns/$NS  (ENV=$ENV, DRY_RUN=$DRY)"
+echo "ENV=$ENV  NS=$NS  DRY_RUN=$DRY"
 
-# Reloader (stakater) để pod tự restart khi ConfigMap/Secret đổi
+# Reloader (Stakater): auto-restarts pods when ConfigMap/Secret changes
 helm repo add stakater https://stakater.github.io/stakater-charts >/dev/null 2>&1 || true
 helm repo update >/dev/null 2>&1 || true
 helm dependency build "$CHARTS/yas-configuration" >/dev/null 2>&1 || true
 
 if [ "$DRY" = "1" ]; then
-  echo "── render: yas-configuration ───────────────────────────"
   helm template yas-configuration "$CHARTS/yas-configuration" -n "$NS"
 else
   helm upgrade --install yas-configuration "$CHARTS/yas-configuration" \
     --namespace "$NS" --create-namespace
-  echo "✅  yas-configuration đã cài vào ns/$NS. Giờ chạy: ./deploy-yas-applications.sh $ENV"
+  echo "yas-configuration deployed to ns/$NS. Next: ./deploy-yas-applications.sh $ENV"
 fi
