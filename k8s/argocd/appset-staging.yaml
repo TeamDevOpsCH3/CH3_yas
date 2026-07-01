@@ -2,22 +2,16 @@
 # appset-staging.yaml — ArgoCD ApplicationSet for env=staging
 #                        (branch main -> ns staging). Methyl CH3 — YAS CD (C22).
 #
-# staging = highest environment (NO production). Promotion path:
-#   develop --(PR + review approve)--> main --(ArgoCD auto-sync)--> ns staging
+# Promotion: develop --(PR + review)--> main --(ArgoCD auto-sync)--> ns staging.
 # The PR-approval on `main` IS the promotion gate, so auto-sync on main is safe.
+# Per-service params + conditional on-prem value file are emitted via templatePatch.
 #
-# PREREQUISITES (do NOT apply this until both are done — see README_C22.md):
-#   1) Config bootstrap:  ./deploy-yas-configuration.sh staging   (creates the
-#      *-application-configmap objects the charts mount; ns staging is empty).
-#   2) At least one PR develop -> main merged, so `main` actually contains
-#      k8s/charts/* + k8s/deploy/values-staging.yaml + vendored subchart deps.
-#   3) RAM headroom (staging full ~= +6-7GB on top of dev). Apply when free.
+# PREREQUISITES (see README_C22.md) before applying:
+#   1) ./deploy-yas-configuration.sh staging   (ns staging is empty -> needs configmaps)
+#   2) >= 1 PR develop -> main merged           (main must contain charts + values + deps)
+#   3) RAM headroom (staging full ~= +6-7GB on top of dev)
 #
-# Unlike dev, sync is AUTOMATED from the start: ns staging is empty, so there is
-# no running release to clash with (no staged-adopt needed).
-#
-# RUN ON: worker-hiep WSL2
-#   kubectl apply -f argocd/appset-staging.yaml
+# RUN ON: worker-hiep WSL2   ->   kubectl apply -f k8s/argocd/appset-staging.yaml
 # =============================================================================
 apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet
@@ -178,14 +172,26 @@ spec:
         app.kubernetes.io/part-of: yas
     spec:
       project: default
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: staging
+      syncPolicy:
+        syncOptions:
+          - CreateNamespace=true
+        automated:
+          prune: true
+          selfHeal: true
+  templatePatch: |
+    spec:
       sources:
         - repoURL: https://github.com/TeamDevOpsCH3/CH3_yas
           targetRevision: main
           ref: values
         - repoURL: https://github.com/TeamDevOpsCH3/CH3_yas
           targetRevision: main
-          path: 'k8s/charts/{{ .service }}'
+          path: k8s/charts/{{ .service }}
           helm:
+            releaseName: {{ .service }}
             valueFiles:
               - $values/k8s/deploy/values-staging.yaml
               {{- if .onprem }}
@@ -193,18 +199,9 @@ spec:
               {{- end }}
             parameters:
               {{- range .params }}
-              - name: '{{ .name }}'
-                value: '{{ .value }}'
+              - name: {{ .name }}
+                value: "{{ .value }}"
                 {{- if .forceString }}
                 forceString: true
                 {{- end }}
               {{- end }}
-      destination:
-        server: https://kubernetes.default.svc
-        namespace: staging
-      syncPolicy:
-        automated:
-          prune: true
-          selfHeal: true
-        syncOptions:
-          - CreateNamespace=true

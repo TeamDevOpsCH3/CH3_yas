@@ -2,20 +2,17 @@
 # appset-dev.yaml — ArgoCD ApplicationSet for env=dev (branch develop -> ns dev)
 # Methyl CH3 — YAS CD (C22).
 #
-# This is the DECLARATIVE equivalent of deploy-yas-applications.sh's bash loop:
+# Declarative equivalent of deploy-yas-applications.sh's bash loop:
 #   list generator  == the SERVICES keep-list table
-#   template params == the per-service `--set` overrides
-#   valueFiles      == the `-f values-dev.yaml` (+ values-onprem.yaml) overlays
-# Goal: ArgoCD renders the SAME result the script produces (image org, DB suffix,
-# Hikari pool, ingress host, on-prem soft-affinity) — just Git-driven + reconciled.
+#   templatePatch   == the per-service `--set` overrides + `-f` value overlays
+# NOTE: per-service params + the conditional on-prem value file are emitted via
+# `templatePatch` (a Go-templated STRING rendered THEN parsed) because bare
+# range/if cannot live in the structured `template` field (invalid raw YAML).
 #
-# ADOPT STAGED: sync policy is MANUAL here on purpose. First apply -> inspect
-# `argocd app diff` -> if clean, sync -> only then uncomment `automated:` below
-# (selfHeal + prune) and re-apply. Prevents self-heal/prune from touching the
-# live dev cluster before we've confirmed the render matches.
+# ADOPT STAGED: sync is MANUAL here. Apply -> `argocd app diff` -> if clean,
+# sync -> only then uncomment `automated:` (selfHeal + prune) and re-apply.
 #
-# RUN ON: worker-hiep WSL2
-#   kubectl apply -f argocd/appset-dev.yaml
+# RUN ON: worker-hiep WSL2   ->   kubectl apply -f k8s/argocd/appset-dev.yaml
 # =============================================================================
 apiVersion: argoproj.io/v1alpha1
 kind: ApplicationSet
@@ -176,14 +173,26 @@ spec:
         app.kubernetes.io/part-of: yas
     spec:
       project: default
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: dev
+      syncPolicy:
+        syncOptions:
+          - CreateNamespace=true
+        automated:
+          prune: true
+          selfHeal: true
+  templatePatch: |
+    spec:
       sources:
         - repoURL: https://github.com/TeamDevOpsCH3/CH3_yas
           targetRevision: develop
           ref: values
         - repoURL: https://github.com/TeamDevOpsCH3/CH3_yas
           targetRevision: develop
-          path: 'k8s/charts/{{ .service }}'
+          path: k8s/charts/{{ .service }}
           helm:
+            releaseName: {{ .service }}
             valueFiles:
               - $values/k8s/deploy/values-dev.yaml
               {{- if .onprem }}
@@ -191,19 +200,9 @@ spec:
               {{- end }}
             parameters:
               {{- range .params }}
-              - name: '{{ .name }}'
-                value: '{{ .value }}'
+              - name: {{ .name }}
+                value: "{{ .value }}"
                 {{- if .forceString }}
                 forceString: true
                 {{- end }}
               {{- end }}
-      destination:
-        server: https://kubernetes.default.svc
-        namespace: dev
-      syncPolicy:
-        syncOptions:
-          - CreateNamespace=true
-        # --- ADOPT STAGED: uncomment AFTER `argocd app diff` is clean ---------
-        # automated:
-        #   prune: true
-        #   selfHeal: true
