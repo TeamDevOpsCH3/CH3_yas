@@ -1,0 +1,32 @@
+# =============================================================================
+# instrumentation.yaml — OTel Operator Instrumentation CR for ns dev. C30 (P2).
+# Methyl CH3.
+#
+# The OTel Operator watches for this CR + pods annotated with
+# `instrumentation.opentelemetry.io/inject-java: "true"`. On such pods it injects
+# an initContainer that drops the OTel Java agent + sets JAVA_TOOL_OPTIONS
+# (-javaagent) + OTEL_* env pointing at the collector. No image rebuild, no
+# in-app dependency required -> gives the javaagent JDBC spans (io.opentelemetry.jdbc)
+# matching the professor's Tempo screenshot.
+#
+# APPLY ON: worker-hiep WSL2  ->  kubectl apply -f instrumentation.yaml
+# (infra resource, not ArgoCD-managed; version it in repo for DR.)
+# =============================================================================
+apiVersion: opentelemetry.io/v1alpha1
+kind: Instrumentation
+metadata:
+  name: yas-java
+  namespace: dev
+spec:
+  exporter:
+    # OTLP HTTP endpoint of the collector (same one the Spring config already used).
+    endpoint: http://opentelemetry-collector.observability:4318
+  propagators:
+    - tracecontext
+    - baggage
+  sampler:
+    type: parentbased_always_on      # sample everything (probability 1)
+  java:
+    env:
+      - name: OTEL_EXPORTER_OTLP_PROTOCOL
+        value: http/protobuf          # match the :4318 HTTP receiver

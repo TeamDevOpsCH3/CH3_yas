@@ -1,20 +1,80 @@
-write:
-  replicas: 1
-read:
-  replicas: 1
-backend:
-  replicas: 1
+# =============================================================================
+# loki.values.yaml — Grafana Loki (SingleBinary + filesystem) for YAS demo.
+# Methyl CH3 — C30 Observability.
+#
+# WHY CHANGED FROM UPSTREAM:
+#   - Chart grafana/loki >= 6.x REQUIRES `loki.schemaConfig` (upstream file
+#     lacked it -> install failed: "You must provide a schema_config").
+#   - Upstream mixed contradictory options: storage.type=filesystem + minio=true
+#     + write/read/backend replicas (SSD/distributed mode). Reconciled to a
+#     single coherent mode.
+#   - Chosen: SingleBinary + filesystem (no object store) = lightest + fewest
+#     failure points for a coursework demo. Trade-off vs SSD+minio: not HA, but
+#     the 3 observability pillars still work; saves ~1.5-2GB RAM + a minio pod.
+#   - Disabled chunks/results memcached (chart default asks ~8Gi RAM -> would
+#     stay Pending / starve the cluster).
+#   - Kept `gateway` enabled: the OTel Collector pushes logs to
+#     http://loki-gateway/loki/api/v1/push (service must exist).
+# =============================================================================
+
+deploymentMode: SingleBinary
+
 loki:
+  auth_enabled: false
   commonConfig:
     replication_factor: 1
-  auth_enabled: false
-test:
-  enabled: false
-storage:
-  type: 'filesystem'
+  # Required by chart >= 6.x. tsdb + filesystem (no S3).
+  schemaConfig:
+    configs:
+      - from: "2024-04-01"
+        store: tsdb
+        object_store: filesystem
+        schema: v13
+        index:
+          prefix: loki_index_
+          period: 24h
+  storage:
+    type: filesystem
+  limits_config:
+    retention_period: 168h        # 7d, đủ cho demo
+  # tránh cảnh báo "too many outstanding requests" khi query trace-to-logs
+  query_scheduler:
+    max_outstanding_requests_per_tenant: 4096
+
+# SingleBinary: 1 pod, có persistence để log không mất khi pod restart.
+singleBinary:
+  replicas: 1
+  persistence:
+    enabled: true
+    size: 5Gi
+
+# Tắt các thành phần SSD/distributed (không dùng ở SingleBinary).
+write:
+  replicas: 0
+read:
+  replicas: 0
+backend:
+  replicas: 0
+
+# Không dùng object store.
 minio:
+  enabled: false
+
+# BẪY RAM: memcached mặc định xin ~8Gi -> tắt cho demo.
+chunksCache:
+  enabled: false
+resultsCache:
+  enabled: false
+
+# Gateway (nginx) cung cấp service `loki-gateway` mà OTel Collector push log tới.
+gateway:
   enabled: true
 
+# Bớt thành phần phụ để nhẹ.
+lokiCanary:
+  enabled: false
+test:
+  enabled: false
 monitoring:
   selfMonitoring:
     enabled: false
