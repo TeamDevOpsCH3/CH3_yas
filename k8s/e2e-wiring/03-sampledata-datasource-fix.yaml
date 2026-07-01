@@ -1,5 +1,5 @@
 # FIX silent-failure seed: sampledata co 2 datasource phu (product/media)
-# ngoai SPRING_DATASOURCE_URL chinh. cd-deploy.sh chi set datasource chinh -> _dev,
+# ngoai SPRING_DATASOURCE_URL chinh. deploy-yas-applications.sh chi set datasource chinh -> _dev,
 # bo sot 2 cai nay -> seed ghi vao DB "product"/"media" (khong suffix) trong khi
 # app dev doc "product_dev"/"media_dev" -> UI "No Products" du seed bao "success".
 # Fix: them _dev vao 2 url duoi. (Ly tuong: dua vao Helm values yas-configuration)

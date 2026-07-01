@@ -101,6 +101,6 @@ cat <<EOF
    sudo $JOIN --node-name=<worker-hiep|worker-hoa>
    # rồi label: kubectl label node <tên> node-type=onprem --overwrite
 
-3. Hạ tầng + app: chạy tutorial Hòa (C11) + ./cd-deploy.sh dev (C18).
+3. Hạ tầng + app: chạy tutorial Hòa (C11) + ./deploy-yas-applications.sh dev (C18).
    (Hoặc nối thêm vào script này nếu muốn full auto.)
 EOF
