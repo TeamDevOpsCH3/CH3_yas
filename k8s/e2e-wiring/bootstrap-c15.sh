@@ -5,7 +5,7 @@
 #
 # TIEN DE (phải xong TRƯỚC khi chạy script này):
 #   1. Cụm sống: kubectl get nodes -> các node Ready (rebuild theo IaC session backup)
-#   2. Hạ tầng + app dev đã deploy: ./cd-deploy.sh dev (C11/C18) -> ns dev 13/13 Running
+#   2. Hạ tầng + app dev đã deploy: ./deploy-yas-applications.sh dev (C11/C18) -> ns dev 13/13 Running
 #
 # Script này tự động hoá: ingress controller + hostPort + apply wiring + seed.
 # CÒN 2 VIỆC TAY (script sẽ nhắc ở cuối): /etc/hosts client + re-import realm.
@@ -30,7 +30,7 @@ if ! kubectl get nodes >/dev/null 2>&1; then
   exit 1
 fi
 if ! kubectl -n dev get deploy product >/dev/null 2>&1; then
-  err "ns dev chưa có app (deploy/product không thấy). Chạy ./cd-deploy.sh dev trước."
+  err "ns dev chưa có app (deploy/product không thấy). Chạy ./deploy-yas-applications.sh dev trước."
   exit 1
 fi
 ready=$(kubectl -n dev get pods --no-headers 2>/dev/null | grep -c "Running" || true)

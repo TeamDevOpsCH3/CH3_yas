@@ -35,7 +35,7 @@ k8s/overrides/
   - Cả 2 máy on-prem **TẮT** → preference không khớp → 5 pod **tự lên droplet**, web KHÔNG sập, không kẹt Pending.
 - ⚠️ **Lúc deploy nên bật CẢ 2 máy on-prem** để tải chia đều; nếu chỉ 1 máy bật, 5 pod dồn về máy đó
   (pull 5 image cùng lúc → có thể nghẽn I/O). Bật cả 2 thì mỗi máy ~2-3 image, nhẹ.
-- Đổi danh sách: `ONPREM="storefront-ui tax" ./cd-deploy.sh baseline`.
+- Đổi danh sách: `ONPREM="storefront-ui tax" ./deploy-yas-applications.sh baseline`.
 
 ## Chạy
 ```bash
@@ -47,12 +47,12 @@ kubectl label node laptop-nfigfmr1 worker-hoa node-type=onprem --overwrite
 kubectl get nodes -L node-type            # kiểm nhãn đúng
 
 # C12 — baseline vào ns yas
-./cd-deploy.sh baseline
+./deploy-yas-applications.sh baseline
 
 # C18 — tạo ns rồi deploy dev/staging
 kubectl apply -f ns-dev-staging.yaml
-./cd-deploy.sh dev
-./cd-deploy.sh staging
+./deploy-yas-applications.sh dev
+./deploy-yas-applications.sh staging
 ```
 Script tự cài `yas-configuration` (ConfigMap/Secret dùng chung) vào từng ns trước khi deploy app,
 tắt `serviceMonitor` (cụm không có Prometheus Operator), và set affinity/nodeSelector như trên.
@@ -60,7 +60,7 @@ tắt `serviceMonitor` (cụm không có Prometheus Operator), và set affinity/
 ## Verify (checklist C12)
 ```bash
 # 1) Render KHÔNG apply — xác nhận image trỏ Docker Hub, không còn ghcr.io:
-DRY_RUN=1 ./cd-deploy.sh dev | grep -E 'image:|SPRING_DATASOURCE_URL' | sort -u
+DRY_RUN=1 ./deploy-yas-applications.sh dev | grep -E 'image:|SPRING_DATASOURCE_URL' | sort -u
 #   → image: "methylch3/yas-product:develop"   (… mọi service)
 #   → value: jdbc:postgresql://postgresql.postgres:5432/product_dev
 
