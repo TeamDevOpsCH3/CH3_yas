@@ -1,0 +1,157 @@
+# =============================================================================
+# appset-dev.yaml — ArgoCD ApplicationSet for env=dev (branch develop -> ns dev)
+# Methyl CH3 — YAS CD (C22).
+#
+# This is the DECLARATIVE equivalent of deploy-yas-applications.sh's bash loop:
+#   list generator  == the SERVICES keep-list table
+#   template params == the per-service `--set` overrides
+#   valueFiles      == the `-f values-dev.yaml` (+ values-onprem.yaml) overlays
+# Goal: ArgoCD renders the SAME result the script produces (image org, DB suffix,
+# Hikari pool, ingress host, on-prem soft-affinity) — just Git-driven + reconciled.
+#
+# ADOPT STAGED: sync policy is MANUAL here on purpose. First apply -> inspect
+# `argocd app diff` -> if clean, sync -> only then uncomment `automated:` below
+# (selfHeal + prune) and re-apply. Prevents self-heal/prune from touching the
+# live dev cluster before we've confirmed the render matches.
+#
+# RUN ON: worker-hiep WSL2
+#   kubectl apply -f argocd/appset-dev.yaml
+# =============================================================================
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: yas-dev
+  namespace: argocd
+spec:
+  goTemplate: true
+  generators:
+    - list:
+        elements:
+          # ---- Backend Java services (image + DB suffix + Hikari pool) --------
+          - service: product
+            onprem: false
+            params:
+              - { name: backend.image.repository, value: methylch3/yas-product }
+              - { name: backend.databaseName, value: product_dev }
+              - { name: backend.extraEnvs[0].name, value: SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE }
+              - { name: backend.extraEnvs[0].value, value: "5", forceString: true }
+          - service: cart
+            onprem: false
+            params:
+              - { name: backend.image.repository, value: methylch3/yas-cart }
+              - { name: backend.databaseName, value: cart_dev }
+              - { name: backend.extraEnvs[0].name, value: SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE }
+              - { name: backend.extraEnvs[0].value, value: "5", forceString: true }
+          - service: order
+            onprem: false
+            params:
+              - { name: backend.image.repository, value: methylch3/yas-order }
+              - { name: backend.databaseName, value: order_dev }
+              - { name: backend.extraEnvs[0].name, value: SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE }
+              - { name: backend.extraEnvs[0].value, value: "5", forceString: true }
+          - service: customer
+            onprem: true
+            params:
+              - { name: backend.image.repository, value: methylch3/yas-customer }
+              - { name: backend.databaseName, value: customer_dev }
+              - { name: backend.extraEnvs[0].name, value: SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE }
+              - { name: backend.extraEnvs[0].value, value: "5", forceString: true }
+          - service: inventory
+            onprem: false
+            params:
+              - { name: backend.image.repository, value: methylch3/yas-inventory }
+              - { name: backend.databaseName, value: inventory_dev }
+              - { name: backend.extraEnvs[0].name, value: SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE }
+              - { name: backend.extraEnvs[0].value, value: "5", forceString: true }
+          - service: tax
+            onprem: true
+            params:
+              - { name: backend.image.repository, value: methylch3/yas-tax }
+              - { name: backend.databaseName, value: tax_dev }
+              - { name: backend.extraEnvs[0].name, value: SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE }
+              - { name: backend.extraEnvs[0].value, value: "5", forceString: true }
+          - service: media
+            onprem: false
+            params:
+              - { name: backend.image.repository, value: methylch3/yas-media }
+              - { name: backend.databaseName, value: media_dev }
+              - { name: backend.extraEnvs[0].name, value: SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE }
+              - { name: backend.extraEnvs[0].value, value: "5", forceString: true }
+          - service: search
+            onprem: false
+            params:
+              - { name: backend.image.repository, value: methylch3/yas-search }
+              - { name: backend.databaseName, value: search_dev }
+              - { name: backend.extraEnvs[0].name, value: SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE }
+              - { name: backend.extraEnvs[0].value, value: "5", forceString: true }
+          - service: sampledata
+            onprem: false
+            params:
+              - { name: backend.image.repository, value: methylch3/yas-sampledata }
+              - { name: backend.databaseName, value: sampledata_dev }
+              - { name: backend.extraEnvs[0].name, value: SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE }
+              - { name: backend.extraEnvs[0].value, value: "5", forceString: true }
+          # ---- BFF services (image + ingress host, NO DB) --------------------
+          - service: storefront-bff
+            onprem: false
+            params:
+              - { name: backend.image.repository, value: methylch3/yas-storefront-bff }
+              - { name: backend.ingress.host, value: storefront.dev.yas.local.com }
+          - service: backoffice-bff
+            onprem: false
+            params:
+              - { name: backend.image.repository, value: methylch3/yas-backoffice-bff }
+              - { name: backend.ingress.host, value: backoffice.dev.yas.local.com }
+          # ---- UI services (ui.image, NO DB, on-prem soft-affinity) ----------
+          - service: storefront-ui
+            onprem: true
+            params:
+              - { name: ui.image.repository, value: methylch3/yas-storefront }
+          - service: backoffice-ui
+            onprem: true
+            params:
+              - { name: ui.image.repository, value: methylch3/yas-backoffice }
+          # ---- swagger-ui (official image, top-level ingress, on-prem) -------
+          - service: swagger-ui
+            onprem: true
+            params:
+              - { name: ingress.host, value: api.dev.yas.local.com }
+  template:
+    metadata:
+      name: 'yas-dev-{{ .service }}'
+      labels:
+        env: dev
+        app.kubernetes.io/part-of: yas
+    spec:
+      project: default
+      sources:
+        - repoURL: https://github.com/TeamDevOpsCH3/CH3_yas
+          targetRevision: develop
+          ref: values
+        - repoURL: https://github.com/TeamDevOpsCH3/CH3_yas
+          targetRevision: develop
+          path: 'k8s/charts/{{ .service }}'
+          helm:
+            valueFiles:
+              - $values/k8s/deploy/values-dev.yaml
+              {{- if .onprem }}
+              - $values/k8s/deploy/values-onprem.yaml
+              {{- end }}
+            parameters:
+              {{- range .params }}
+              - name: '{{ .name }}'
+                value: '{{ .value }}'
+                {{- if .forceString }}
+                forceString: true
+                {{- end }}
+              {{- end }}
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: dev
+      syncPolicy:
+        syncOptions:
+          - CreateNamespace=true
+        # --- ADOPT STAGED: uncomment AFTER `argocd app diff` is clean ---------
+        # automated:
+        #   prune: true
+        #   selfHeal: true

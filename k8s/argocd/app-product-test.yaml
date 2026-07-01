@@ -1,0 +1,52 @@
+# =============================================================================
+# app-product-test.yaml — Single-service smoke test for ArgoCD render (C22).
+# Methyl CH3 — YAS CD.
+#
+# PURPOSE: verify ArgoCD repo-server can render ONE chart (product) with the
+# multi-source + values-dev + per-service parameters pattern, BEFORE applying
+# the full 14-service ApplicationSet. Apply -> `argocd app get` (do NOT sync):
+#   - status "OutOfSync" with a diff  = render OK (adopt will be clean)
+#   - status "Unknown / ComparisonError" = render broken (fix before appset)
+#
+# This app is DISPOSABLE. Delete it before applying appset-dev:
+#   kubectl -n argocd delete application yas-dev-product-test
+#
+# RUN ON: worker-hiep WSL2
+#   kubectl apply -f argocd/app-product-test.yaml
+# =============================================================================
+apiVersion: argoproj.io/v1alpha1
+kind: Application
+metadata:
+  name: yas-dev-product-test
+  namespace: argocd
+spec:
+  project: default
+  sources:
+    # Source #1: repo as a bare $values ref (for shared env value files).
+    - repoURL: https://github.com/TeamDevOpsCH3/CH3_yas
+      targetRevision: develop
+      ref: values
+    # Source #2: the product chart, rendered with values + per-service --set.
+    - repoURL: https://github.com/TeamDevOpsCH3/CH3_yas
+      targetRevision: develop
+      path: k8s/charts/product
+      helm:
+        valueFiles:
+          - $values/k8s/deploy/values-dev.yaml
+        parameters:
+          - name: backend.image.repository
+            value: methylch3/yas-product
+          - name: backend.databaseName
+            value: product_dev
+          - name: backend.extraEnvs[0].name
+            value: SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE
+          - name: backend.extraEnvs[0].value
+            value: "5"
+            forceString: true
+  destination:
+    server: https://kubernetes.default.svc
+    namespace: dev
+  # Manual: no automated sync. We only want to inspect the render/diff.
+  syncPolicy:
+    syncOptions:
+      - CreateNamespace=true
