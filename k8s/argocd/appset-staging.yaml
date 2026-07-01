@@ -1,0 +1,158 @@
+# =============================================================================
+# appset-staging.yaml — ArgoCD ApplicationSet for env=staging
+#                        (branch main -> ns staging). Methyl CH3 — YAS CD (C22).
+#
+# staging = highest environment (NO production). Promotion path:
+#   develop --(PR + review approve)--> main --(ArgoCD auto-sync)--> ns staging
+# The PR-approval on `main` IS the promotion gate, so auto-sync on main is safe.
+#
+# PREREQUISITES (do NOT apply this until both are done — see README_C22.md):
+#   1) Config bootstrap:  ./deploy-yas-configuration.sh staging   (creates the
+#      *-application-configmap objects the charts mount; ns staging is empty).
+#   2) At least one PR develop -> main merged, so `main` actually contains
+#      k8s/charts/* + k8s/deploy/values-staging.yaml + vendored subchart deps.
+#   3) RAM headroom (staging full ~= +6-7GB on top of dev). Apply when free.
+#
+# Unlike dev, sync is AUTOMATED from the start: ns staging is empty, so there is
+# no running release to clash with (no staged-adopt needed).
+#
+# RUN ON: worker-hiep WSL2
+#   kubectl apply -f argocd/appset-staging.yaml
+# =============================================================================
+apiVersion: argoproj.io/v1alpha1
+kind: ApplicationSet
+metadata:
+  name: yas-staging
+  namespace: argocd
+spec:
+  goTemplate: true
+  generators:
+    - list:
+        elements:
+          # ---- Backend Java services (image + DB suffix + Hikari pool) --------
+          - service: product
+            onprem: false
+            params:
+              - { name: backend.image.repository, value: methylch3/yas-product }
+              - { name: backend.databaseName, value: product_staging }
+              - { name: backend.extraEnvs[0].name, value: SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE }
+              - { name: backend.extraEnvs[0].value, value: "5", forceString: true }
+          - service: cart
+            onprem: false
+            params:
+              - { name: backend.image.repository, value: methylch3/yas-cart }
+              - { name: backend.databaseName, value: cart_staging }
+              - { name: backend.extraEnvs[0].name, value: SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE }
+              - { name: backend.extraEnvs[0].value, value: "5", forceString: true }
+          - service: order
+            onprem: false
+            params:
+              - { name: backend.image.repository, value: methylch3/yas-order }
+              - { name: backend.databaseName, value: order_staging }
+              - { name: backend.extraEnvs[0].name, value: SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE }
+              - { name: backend.extraEnvs[0].value, value: "5", forceString: true }
+          - service: customer
+            onprem: true
+            params:
+              - { name: backend.image.repository, value: methylch3/yas-customer }
+              - { name: backend.databaseName, value: customer_staging }
+              - { name: backend.extraEnvs[0].name, value: SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE }
+              - { name: backend.extraEnvs[0].value, value: "5", forceString: true }
+          - service: inventory
+            onprem: false
+            params:
+              - { name: backend.image.repository, value: methylch3/yas-inventory }
+              - { name: backend.databaseName, value: inventory_staging }
+              - { name: backend.extraEnvs[0].name, value: SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE }
+              - { name: backend.extraEnvs[0].value, value: "5", forceString: true }
+          - service: tax
+            onprem: true
+            params:
+              - { name: backend.image.repository, value: methylch3/yas-tax }
+              - { name: backend.databaseName, value: tax_staging }
+              - { name: backend.extraEnvs[0].name, value: SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE }
+              - { name: backend.extraEnvs[0].value, value: "5", forceString: true }
+          - service: media
+            onprem: false
+            params:
+              - { name: backend.image.repository, value: methylch3/yas-media }
+              - { name: backend.databaseName, value: media_staging }
+              - { name: backend.extraEnvs[0].name, value: SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE }
+              - { name: backend.extraEnvs[0].value, value: "5", forceString: true }
+          - service: search
+            onprem: false
+            params:
+              - { name: backend.image.repository, value: methylch3/yas-search }
+              - { name: backend.databaseName, value: search_staging }
+              - { name: backend.extraEnvs[0].name, value: SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE }
+              - { name: backend.extraEnvs[0].value, value: "5", forceString: true }
+          - service: sampledata
+            onprem: false
+            params:
+              - { name: backend.image.repository, value: methylch3/yas-sampledata }
+              - { name: backend.databaseName, value: sampledata_staging }
+              - { name: backend.extraEnvs[0].name, value: SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE }
+              - { name: backend.extraEnvs[0].value, value: "5", forceString: true }
+          # ---- BFF services (image + ingress host, NO DB) --------------------
+          - service: storefront-bff
+            onprem: false
+            params:
+              - { name: backend.image.repository, value: methylch3/yas-storefront-bff }
+              - { name: backend.ingress.host, value: storefront.staging.yas.local.com }
+          - service: backoffice-bff
+            onprem: false
+            params:
+              - { name: backend.image.repository, value: methylch3/yas-backoffice-bff }
+              - { name: backend.ingress.host, value: backoffice.staging.yas.local.com }
+          # ---- UI services (ui.image, NO DB, on-prem soft-affinity) ----------
+          - service: storefront-ui
+            onprem: true
+            params:
+              - { name: ui.image.repository, value: methylch3/yas-storefront }
+          - service: backoffice-ui
+            onprem: true
+            params:
+              - { name: ui.image.repository, value: methylch3/yas-backoffice }
+          # ---- swagger-ui (official image, top-level ingress, on-prem) -------
+          - service: swagger-ui
+            onprem: true
+            params:
+              - { name: ingress.host, value: api.staging.yas.local.com }
+  template:
+    metadata:
+      name: 'yas-staging-{{ .service }}'
+      labels:
+        env: staging
+        app.kubernetes.io/part-of: yas
+    spec:
+      project: default
+      sources:
+        - repoURL: https://github.com/TeamDevOpsCH3/CH3_yas
+          targetRevision: main
+          ref: values
+        - repoURL: https://github.com/TeamDevOpsCH3/CH3_yas
+          targetRevision: main
+          path: 'k8s/charts/{{ .service }}'
+          helm:
+            valueFiles:
+              - $values/k8s/deploy/values-staging.yaml
+              {{- if .onprem }}
+              - $values/k8s/deploy/values-onprem.yaml
+              {{- end }}
+            parameters:
+              {{- range .params }}
+              - name: '{{ .name }}'
+                value: '{{ .value }}'
+                {{- if .forceString }}
+                forceString: true
+                {{- end }}
+              {{- end }}
+      destination:
+        server: https://kubernetes.default.svc
+        namespace: staging
+      syncPolicy:
+        automated:
+          prune: true
+          selfHeal: true
+        syncOptions:
+          - CreateNamespace=true
