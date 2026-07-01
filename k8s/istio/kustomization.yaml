@@ -4,3 +4,5 @@ kind: Kustomization
 resources:
   - peer-authentication-dev-strict.yaml
   - authorization-policy-product-allow-cart-only.yaml
+  - virtual-service-tax-retry.yaml
+  - virtual-service-product-retry.yaml

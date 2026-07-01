@@ -17,7 +17,10 @@ This setup enables:
 |---|---|
 | `peer-authentication-dev-strict.yaml` | Enables STRICT mTLS for all workloads in namespace `dev`. |
 | `authorization-policy-product-allow-cart-only.yaml` | Allows only `cluster.local/ns/dev/sa/cart` to access the `product` workload. |
-| `kustomization.yaml` | Applies all manifests in this directory. |
+| `virtual-service-tax-retry.yaml` | Retry policy for `tax`: 3 attempts, 2s perTryTimeout, on 5xx/connect-failure/reset. |
+| `virtual-service-product-retry.yaml` | Retry policy for `product`: same config as tax. |
+| `virtual-service-tax-fault-inject.yaml` | **Demo-only** — inject 503 on tax to trigger and observe retries. Do not add to kustomization. |
+| `kustomization.yaml` | Applies all permanent manifests in this directory. |
 
 ## Apply
 
@@ -180,3 +183,71 @@ Remove all manifests from this directory:
 ```bash
 kubectl delete -k k8s/istio/dev
 ```
+
+---
+
+## C25 — Retry Policy (VirtualService)
+
+Retries are configured for `tax` and `product` in namespace `dev`.
+Envoy sidecar automatically retries on transient errors without any app code change.
+
+| Parameter | Value | Reason |
+|---|---|---|
+| `attempts` | `3` | Max 8s worst case (1 + 3 retries × 2s) |
+| `perTryTimeout` | `2s` | Fast fail-fast per attempt |
+| `retryOn` | `5xx,connect-failure,reset` | Transient only; never retry 4xx |
+
+### Apply
+
+```bash
+kubectl apply -k k8s/istio
+
+# Verify VirtualServices
+kubectl get virtualservice -n dev
+```
+
+Expected:
+
+```text
+NAME              GATEWAYS   HOSTS         AGE
+product-retry                ["product"]   5s
+tax-retry                    ["tax"]       5s
+```
+
+### Demo — capture EV-RETRY evidence
+
+```bash
+# 1. Confirm sidecars running (must show 2/2)
+kubectl get pods -n dev -l 'app.kubernetes.io/name in (tax,order,product)' \
+  --no-headers | awk '{print $1, $2}'
+
+# 2. Apply fault injection (100% → 503 on tax)
+kubectl apply -f k8s/istio/virtual-service-tax-fault-inject.yaml
+
+# 3. Trigger traffic from order pod
+ORDER_POD=$(kubectl -n dev get pod -l app.kubernetes.io/name=order \
+  -o jsonpath='{.items[0].metadata.name}')
+kubectl -n dev exec "$ORDER_POD" -- \
+  wget -qO- http://tax:8080/actuator/health 2>&1 || true
+
+# 4. Capture retry evidence in istio-proxy log
+kubectl logs "$ORDER_POD" -n dev -c istio-proxy --tail=100 \
+  | grep -iE "retry|attempt|upstream_reset"
+
+# 5. Check attempt count header
+kubectl -n dev exec "$ORDER_POD" -- \
+  wget -S -qO- http://tax:8080/actuator/health 2>&1 | grep -i "attempt"
+# Expected: x-envoy-attempt-count: 3
+
+# 6. DELETE fault injection after evidence captured
+kubectl delete virtualservice tax-fault-inject -n dev
+
+# 7. Confirm permanent retry VirtualServices still present
+kubectl get virtualservice -n dev
+```
+
+### Rollback retry policies
+
+```bash
+kubectl delete virtualservice tax-retry product-retry -n dev
+```
