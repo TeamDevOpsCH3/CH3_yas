@@ -1,66 +1,114 @@
-# YAS K8S Deployment
-## Resource cluster installation reference
-- **Postgresql:** https://github.com/zalando/postgres-operator
-- **Elasticsearch:** https://github.com/elastic/cloud-on-k8s
-- **Kafka:** https://github.com/strimzi/strimzi-kafka-operator
-- **Debezium Connect:** https://debezium.io/documentation/reference/stable/operations/kubernetes.html
-- **Keycloak:** https://www.keycloak.org/operator/installation
+# YAS K8S Deployment — Methyl CH3
+
+## ⚠️ Deviation vs repo gốc (nashtech-garage/yas)
+
+Nhóm CH3 dùng **Bitnami** thay operator gốc cho data store. Bản operator gốc vẫn lưu tại `*.operator.bak/` làm evidence.
+
+| Component | Repo gốc (nashtech-garage) | Nhóm CH3 | Lý do |
+|---|---|---|---|
+| PostgreSQL | Zalando Postgres Operator | **Bitnami StatefulSet** | Operator overhead ~500MB RAM |
+| Kafka | Strimzi Operator + ZooKeeper | **Bitnami KRaft (no ZK)** | Strimzi ~400MB RAM; Kafka 4.0 bỏ ZK |
+| Elasticsearch | ECK Operator | **Bitnami StatefulSet** | ECK overhead ~600MB RAM |
+| Keycloak | Keycloak Operator CRD | **Bitnami Chart** | CRD không tương thích K8s version cụm |
+| Redis | Bitnami | Bitnami | Giữ nguyên |
+| Observability | Grafana/Prometheus/Loki/Tempo | Giữ nguyên | RAM đủ, thầy yêu cầu |
+| Access | Ingress + domain `*.yas.local.com` | **NodePort + Tailscale IP** | Không có cloud LoadBalancer |
+
+## Resource references (Bitnami)
+
+- **PostgreSQL:** https://artifacthub.io/packages/helm/bitnami/postgresql
+- **Elasticsearch:** https://artifacthub.io/packages/helm/bitnami/elasticsearch
+- **Kafka:** https://artifacthub.io/packages/helm/bitnami/kafka
+- **Keycloak:** https://artifacthub.io/packages/helm/bitnami/keycloak
 - **Redis:** https://artifacthub.io/packages/helm/bitnami/redis
-- **Reloader:** https://github.com/stakater/Reloader
+- **Debezium Connect:** https://debezium.io/documentation/reference/stable/operations/kubernetes.html
 - **Prometheus:** https://github.com/prometheus-community/helm-charts/tree/main/charts/kube-prometheus-stack
 - **Grafana:** https://github.com/grafana-operator/grafana-operator
 - **Loki:** https://github.com/grafana/loki/tree/main/production/helm/loki
 - **Tempo:** https://github.com/grafana/helm-charts/tree/main/charts/tempo
 - **Promtail:** https://github.com/grafana/helm-charts/tree/main/charts/promtail
-- **Opentelemetry:** https://github.com/open-telemetry/opentelemetry-operator
-## Local installation steps
-- Require a minikube node minimum 16G memory and 40G disk space and run on Ubuntu operator
+- **OpenTelemetry:** https://github.com/open-telemetry/opentelemetry-operator
+## Cluster setup (nhóm CH3)
+
+Nhóm dùng **kubeadm cluster** (3 droplet DigitalOcean + 2 Windows WSL2), kết nối qua **Tailscale** thay vì minikube.
+
+**Prerequisites:**
 ```shell
-minikube start --disk-size='40000mb' --memory='16g'
+# Helm
+curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
+
+# yq (QUAN TRỌNG: script dùng yq để đọc cluster-config.yaml)
+sudo snap install yq
+# Hoặc: sudo wget -qO /usr/local/bin/yq https://github.com/mikefarah/yq/releases/latest/download/yq_linux_amd64
+# chmod +x /usr/local/bin/yq
+
+# Verify
+helm version
+yq --version
+kubectl get nodes -o wide
 ```
-- Enable ingress addon
-```shell
-minikube addons enable ingress
-```
-- Install helm
-  https://helm.sh/
-- Install yq (the tool read, update yaml file)
-  https://github.com/mikefarah/yq
-- Goto `k8s-deployment` folder
-- Execute [setup-keycloak.sh](setup-cluster.sh) to set up keycloak as the Identity and Access Management server.
-```shell
-./setup-keycloak.sh
-```
-- Execute [setup-redis.sh](setup-cluster.sh) to set up Redis as the server to store sessions for backends.
-```shell
-./setup-redis.sh
-```
-- Execute [setup-cluster.sh](setup-cluster.sh) to set up severs: `postgresql`, `elasticsearch`, `kafka`, `debezium connect`
+
+## Runbook deploy (đúng thứ tự)
+
+> Chạy tất cả lệnh từ thư mục `k8s/deploy/`
+
+**Bước 1 — Data store + Observability:**
 ```shell
 ./setup-cluster.sh
+# Hoặc chỉ data store: ./setup-cluster.sh datastore
 ```
-- Verify all servers run successful on namespaces: `postgres`, `elasticsearch`, `kafka`, `keycloak`
-- After all above servers are running status, execute  [deploy-yas-applications.sh](deploy-yas-applications.sh) file to deploy all of yas applications to `yas` namespace
-```shell
-./deploy-yas-applications
-```
-All of YAS microservice deployed in `yas` namespace
-- Setup hosts file
-edit host file `/etc/hots`
-```shell
-192.168.49.2 pgoperator.yas.local.com
-192.168.49.2 pgadmin.yas.local.com
-192.168.49.2 akhq.yas.local.com
-192.168.49.2 kibana.yas.local.com
-192.168.49.2 identity.yas.local.com
-192.168.49.2 backoffice.yas.local.com
-192.168.49.2 storefront.yas.local.com
-192.168.49.2 grafana.yas.local.com
 
-```
-`192.168.49.2` is ip of minikbe node use this command line to get the ip of minikube
+**Bước 2 — Verify infra Running trước khi tiếp:**
 ```shell
-minikube ip
+kubectl get pods -n postgres
+kubectl get pods -n kafka
+kubectl get pods -n elasticsearch
+```
+
+**Bước 3 — Keycloak (phụ thuộc PostgreSQL đã Running):**
+```shell
+./setup-keycloak.sh
+kubectl rollout status deploy/identity -n keycloak --timeout=300s
+```
+
+**Bước 4 — Redis:**
+```shell
+./setup-redis.sh
+kubectl get pods -n redis
+```
+
+**Bước 5 — Deploy config chung:**
+```shell
+./deploy-yas-configuration.sh baseline
+```
+
+**Bước 6 — Deploy toàn bộ app:**
+```shell
+./deploy-yas-applications.sh baseline
+kubectl get pods -n yas
+kubectl get svc -n yas
+```
+
+## Access (NodePort + Tailscale)
+
+Nhóm CH3 dùng **NodePort** thay Ingress. Lấy Tailscale IP của worker node:
+
+```shell
+kubectl get nodes -o wide   # cột INTERNAL-IP → Tailscale IP
+```
+
+Sửa `/etc/hosts` trên máy client:
+```shell
+<TAILSCALE_IP>  storefront.yas.local.com
+<TAILSCALE_IP>  backoffice.yas.local.com
+<TAILSCALE_IP>  identity.yas.local.com
+<TAILSCALE_IP>  api.yas.local.com
+```
+
+NodePort cụ thể:
+```shell
+kubectl get svc -n yas          # xem NodePort từng service
+kubectl get svc -n keycloak     # Keycloak NodePort
 ```
 ## Keycloak bootstrap admin credentials
 The username and password of Keycloak admin user store in the `keycloak-credentials` secret, `keycloak` namespace

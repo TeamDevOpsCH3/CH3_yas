@@ -1,0 +1,33 @@
+# Bitnami Keycloak — values for YAS cluster (CH3)
+# Replaces: Keycloak Operator CRD (*.operator.bak/)
+# Reason: operator CRDs incompatible with cluster K8s version
+
+fullnameOverride: identity  # DNS: identity.keycloak.svc.cluster.local (referenced by all YAS apps)
+
+auth:
+  adminUser: admin
+  adminPassword: admin
+
+postgresql:
+  enabled: false  # use shared PostgreSQL in namespace postgres
+
+externalDatabase:
+  host: postgresql.postgres.svc.cluster.local
+  port: 5432
+  user: yasadminuser
+  password: admin
+  database: keycloak
+
+service:
+  type: NodePort  # no cloud LoadBalancer; access via Tailscale IP + NodePort
+
+resources:
+  requests:
+    memory: 512Mi
+    cpu: 200m
+  limits:
+    memory: 768Mi
+    cpu: 500m
+
+nodeSelector:
+  node-type: cloud

@@ -1,0 +1,28 @@
+# Bitnami PostgreSQL — values for YAS cluster (CH3)
+# Replaces: Zalando postgres-operator (*.operator.bak/)
+# Reason: operator overhead ~500MB RAM; cluster RAM-constrained
+
+auth:
+  postgresPassword: admin
+  username: yasadminuser
+  password: admin
+
+primary:
+  extraEnvVars:
+    - name: POSTGRESQL_WAL_LEVEL
+      value: logical  # required by Debezium CDC (product → elasticsearch sync)
+
+  resources:
+    requests:
+      memory: 256Mi
+      cpu: 100m
+    limits:
+      memory: 512Mi
+      cpu: 500m
+
+  nodeSelector:
+    node-type: cloud  # pin to cloud droplets; avoid data loss when WSL2 shuts down
+
+  persistence:
+    enabled: true
+    size: 10Gi
