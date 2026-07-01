@@ -1,3 +1,17 @@
+# =============================================================================
+# opentelemetry/values.yaml — OTel Collector (traces only) for YAS. Methyl CH3 — C30.
+#
+# WHY CHANGED FROM UPSTREAM:
+#   - The collector image is opentelemetry-collector-k8s (0.153.0), a MINIMAL
+#     distribution that does NOT ship the `loki` receiver/exporter. Upstream
+#     config used receivers.loki + exporters.loki -> collector crash-looped:
+#       "'receivers' unknown type: loki ... 'exporters' unknown type: loki".
+#   - Logs already reach Loki directly via the Promtail DaemonSet, so the
+#     collector's loki logs-pipeline was redundant. Removed it.
+#   - Kept ONLY the traces pipeline: app --OTLP--> collector --otlphttp--> tempo.
+#     This is exactly what C30 needs for the Tempo distributed-trace screenshot.
+#   - Replaced deprecated `logging` exporter with `debug` (same purpose, current name).
+# =============================================================================
 opentelemetryCollectorConfig:
   receivers:
     otlp:
@@ -6,35 +20,15 @@ opentelemetryCollectorConfig:
           endpoint: 0.0.0.0:4317
         http:
           endpoint: 0.0.0.0:4318
-    loki:
-      protocols:
-        http:
-          endpoint: 0.0.0.0:3500
-      use_incoming_timestamp: true
   processors:
-    batch:
-    attributes:
-      actions:
-        - action: insert
-          key: loki.attribute.labels
-          value: namespace,container,pod,level,traceId
-        - action: insert
-          key: loki.format
-          value: raw
-
+    batch: {}
   exporters:
-    logging:
+    debug:
       verbosity: detailed
-    loki:
-      endpoint: http://loki-gateway/loki/api/v1/push
     otlphttp:
       endpoint: http://tempo:4318
   service:
     pipelines:
-      logs:
-        receivers: [loki]
-        processors: [attributes]
-        exporters: [loki]
       traces:
         receivers: [otlp]
         processors: [batch]

@@ -17,7 +17,7 @@ read -rd '' DOMAIN POSTGRESQL_USERNAME POSTGRESQL_PASSWORD \
   GRAFANA_USERNAME GRAFANA_PASSWORD \
   < <(yq -r '.domain,
     .postgresql.username, .postgresql.password,
-    .grafana.username, .grafana.password' ./cluster-config.yaml)
+    .grafana.username, .grafana.password' ./cluster-config.yaml) || true
 
 setup_datastore() {
   helm repo add bitnami https://charts.bitnami.com/bitnami 2>/dev/null || true

@@ -3,8 +3,8 @@
 
 backend:
   image:
-    tag: 7899c97c9956      # SHA baseline C09 (build đủ 13 service). Xem ghi chú cuối file.
-    pullPolicy: Always          # tag mutable → luôn kéo bản mới nhất khi pod tạo lại
+    tag: 7899c97c9956 # SHA baseline C09 (build đủ 13 service). Xem ghi chú cuối file.
+    pullPolicy: Always # tag mutable → luôn kéo bản mới nhất khi pod tạo lại
   serviceMonitor:
     enabled: false
   affinity:
@@ -16,10 +16,11 @@ backend:
               - key: node-type
                 operator: In
                 values: ["cloud"]
-
+  podAnnotations:
+    instrumentation.opentelemetry.io/inject-java: "true"
 ui:
   image:
-    tag: 7899c97c9956      # SHA baseline C09 (build đủ 13 service). Xem ghi chú cuối file.
+    tag: 7899c97c9956 # SHA baseline C09 (build đủ 13 service). Xem ghi chú cuối file.
     pullPolicy: Always
   affinity:
     nodeAffinity:
@@ -30,7 +31,6 @@ ui:
               - key: node-type
                 operator: In
                 values: ["cloud"]
-
 # ─────────────────────────────────────────────────────────────────────────────
 # GHI CHÚ TAG (cách A — tag = commit SHA, theo quy ước C08):
 #   • main CHƯA được build (chưa PR develop→main lần nào) → KHÔNG có image tag main.
