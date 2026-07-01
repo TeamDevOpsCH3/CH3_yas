@@ -33,91 +33,143 @@ spec:
           - service: product
             onprem: false
             params:
-              - { name: backend.image.repository, value: methylch3/yas-product }
-              - { name: backend.databaseName, value: product_staging }
-              - { name: backend.extraEnvs[0].name, value: SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE }
-              - { name: backend.extraEnvs[0].value, value: "5", forceString: true }
+              - name: backend.image.repository
+                value: methylch3/yas-product
+              - name: backend.databaseName
+                value: product_staging
+              - name: backend.extraEnvs[0].name
+                value: SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE
+              - name: backend.extraEnvs[0].value
+                value: "5"
+                forceString: true
           - service: cart
             onprem: false
             params:
-              - { name: backend.image.repository, value: methylch3/yas-cart }
-              - { name: backend.databaseName, value: cart_staging }
-              - { name: backend.extraEnvs[0].name, value: SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE }
-              - { name: backend.extraEnvs[0].value, value: "5", forceString: true }
+              - name: backend.image.repository
+                value: methylch3/yas-cart
+              - name: backend.databaseName
+                value: cart_staging
+              - name: backend.extraEnvs[0].name
+                value: SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE
+              - name: backend.extraEnvs[0].value
+                value: "5"
+                forceString: true
           - service: order
             onprem: false
             params:
-              - { name: backend.image.repository, value: methylch3/yas-order }
-              - { name: backend.databaseName, value: order_staging }
-              - { name: backend.extraEnvs[0].name, value: SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE }
-              - { name: backend.extraEnvs[0].value, value: "5", forceString: true }
+              - name: backend.image.repository
+                value: methylch3/yas-order
+              - name: backend.databaseName
+                value: order_staging
+              - name: backend.extraEnvs[0].name
+                value: SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE
+              - name: backend.extraEnvs[0].value
+                value: "5"
+                forceString: true
           - service: customer
             onprem: true
             params:
-              - { name: backend.image.repository, value: methylch3/yas-customer }
-              - { name: backend.databaseName, value: customer_staging }
-              - { name: backend.extraEnvs[0].name, value: SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE }
-              - { name: backend.extraEnvs[0].value, value: "5", forceString: true }
+              - name: backend.image.repository
+                value: methylch3/yas-customer
+              - name: backend.databaseName
+                value: customer_staging
+              - name: backend.extraEnvs[0].name
+                value: SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE
+              - name: backend.extraEnvs[0].value
+                value: "5"
+                forceString: true
           - service: inventory
             onprem: false
             params:
-              - { name: backend.image.repository, value: methylch3/yas-inventory }
-              - { name: backend.databaseName, value: inventory_staging }
-              - { name: backend.extraEnvs[0].name, value: SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE }
-              - { name: backend.extraEnvs[0].value, value: "5", forceString: true }
+              - name: backend.image.repository
+                value: methylch3/yas-inventory
+              - name: backend.databaseName
+                value: inventory_staging
+              - name: backend.extraEnvs[0].name
+                value: SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE
+              - name: backend.extraEnvs[0].value
+                value: "5"
+                forceString: true
           - service: tax
             onprem: true
             params:
-              - { name: backend.image.repository, value: methylch3/yas-tax }
-              - { name: backend.databaseName, value: tax_staging }
-              - { name: backend.extraEnvs[0].name, value: SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE }
-              - { name: backend.extraEnvs[0].value, value: "5", forceString: true }
+              - name: backend.image.repository
+                value: methylch3/yas-tax
+              - name: backend.databaseName
+                value: tax_staging
+              - name: backend.extraEnvs[0].name
+                value: SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE
+              - name: backend.extraEnvs[0].value
+                value: "5"
+                forceString: true
           - service: media
             onprem: false
             params:
-              - { name: backend.image.repository, value: methylch3/yas-media }
-              - { name: backend.databaseName, value: media_staging }
-              - { name: backend.extraEnvs[0].name, value: SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE }
-              - { name: backend.extraEnvs[0].value, value: "5", forceString: true }
+              - name: backend.image.repository
+                value: methylch3/yas-media
+              - name: backend.databaseName
+                value: media_staging
+              - name: backend.extraEnvs[0].name
+                value: SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE
+              - name: backend.extraEnvs[0].value
+                value: "5"
+                forceString: true
           - service: search
             onprem: false
             params:
-              - { name: backend.image.repository, value: methylch3/yas-search }
-              - { name: backend.databaseName, value: search_staging }
-              - { name: backend.extraEnvs[0].name, value: SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE }
-              - { name: backend.extraEnvs[0].value, value: "5", forceString: true }
+              - name: backend.image.repository
+                value: methylch3/yas-search
+              - name: backend.databaseName
+                value: search_staging
+              - name: backend.extraEnvs[0].name
+                value: SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE
+              - name: backend.extraEnvs[0].value
+                value: "5"
+                forceString: true
           - service: sampledata
             onprem: false
             params:
-              - { name: backend.image.repository, value: methylch3/yas-sampledata }
-              - { name: backend.databaseName, value: sampledata_staging }
-              - { name: backend.extraEnvs[0].name, value: SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE }
-              - { name: backend.extraEnvs[0].value, value: "5", forceString: true }
+              - name: backend.image.repository
+                value: methylch3/yas-sampledata
+              - name: backend.databaseName
+                value: sampledata_staging
+              - name: backend.extraEnvs[0].name
+                value: SPRING_DATASOURCE_HIKARI_MAXIMUM_POOL_SIZE
+              - name: backend.extraEnvs[0].value
+                value: "5"
+                forceString: true
           # ---- BFF services (image + ingress host, NO DB) --------------------
           - service: storefront-bff
             onprem: false
             params:
-              - { name: backend.image.repository, value: methylch3/yas-storefront-bff }
-              - { name: backend.ingress.host, value: storefront.staging.yas.local.com }
+              - name: backend.image.repository
+                value: methylch3/yas-storefront-bff
+              - name: backend.ingress.host
+                value: storefront.staging.yas.local.com
           - service: backoffice-bff
             onprem: false
             params:
-              - { name: backend.image.repository, value: methylch3/yas-backoffice-bff }
-              - { name: backend.ingress.host, value: backoffice.staging.yas.local.com }
+              - name: backend.image.repository
+                value: methylch3/yas-backoffice-bff
+              - name: backend.ingress.host
+                value: backoffice.staging.yas.local.com
           # ---- UI services (ui.image, NO DB, on-prem soft-affinity) ----------
           - service: storefront-ui
             onprem: true
             params:
-              - { name: ui.image.repository, value: methylch3/yas-storefront }
+              - name: ui.image.repository
+                value: methylch3/yas-storefront
           - service: backoffice-ui
             onprem: true
             params:
-              - { name: ui.image.repository, value: methylch3/yas-backoffice }
+              - name: ui.image.repository
+                value: methylch3/yas-backoffice
           # ---- swagger-ui (official image, top-level ingress, on-prem) -------
           - service: swagger-ui
             onprem: true
             params:
-              - { name: ingress.host, value: api.staging.yas.local.com }
+              - name: ingress.host
+                value: api.staging.yas.local.com
   template:
     metadata:
       name: 'yas-staging-{{ .service }}'
