@@ -34,4 +34,8 @@ hs_err_pid*
 *id_auto*
 *.tgz
 *.db
-pki-*
+# PKI backup archives only — do NOT ignore pki-*.yaml manifests (e.g. k8s/ops/pki-backup-cronjob.yaml)
+pki-*.tgz
+# AI-generated reports (local only, not versioned)
+docs-ai/
+.claude/
