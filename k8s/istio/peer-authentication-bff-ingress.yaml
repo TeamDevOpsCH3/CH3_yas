@@ -21,7 +21,7 @@ spec:
   mtls:
     mode: STRICT          # mặc định workload vẫn STRICT
   portLevelMtls:
-    80:
+    "80":
       mode: PERMISSIVE    # riêng port app 80: nhận cả plaintext (ingress)
 ---
 apiVersion: security.istio.io/v1
@@ -36,5 +36,5 @@ spec:
   mtls:
     mode: STRICT
   portLevelMtls:
-    80:
+    "80":
       mode: PERMISSIVE

@@ -1,0 +1,27 @@
+# =============================================================================
+# authorization-policy-product-deny-order.yaml
+# THAY authorization-policy-product-allow-cart-only.yaml (quá hẹp).
+# Demo authz: CHỈ chặn order → product (khớp README "order denied when calling
+# product"). Mọi service hợp lệ khác (storefront-bff, backoffice-bff, cart,
+# search...) gọi product BÌNH THƯỜNG → luồng app chạy, không lo sót SA.
+# -----------------------------------------------------------------------------
+# Vì sao đổi từ ALLOW-cart-only → DENY-order:
+#   ALLOW cart-only = deny-by-default → chặn CẢ storefront-bff (cần product để
+#   hiển thị sản phẩm) → storefront 502. DENY-order = allow-by-default → chỉ
+#   order bị chặn, giữ đúng điểm demo mà không phá luồng mua hàng.
+# =============================================================================
+apiVersion: security.istio.io/v1
+kind: AuthorizationPolicy
+metadata:
+  name: product-deny-order
+  namespace: dev
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: product
+  action: DENY
+  rules:
+    - from:
+        - source:
+            principals:
+              - cluster.local/ns/dev/sa/order

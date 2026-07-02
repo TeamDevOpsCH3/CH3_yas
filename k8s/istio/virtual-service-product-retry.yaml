@@ -15,4 +15,4 @@ spec:
         - destination:
             host: product
             port:
-              number: 8080
+              number: 80

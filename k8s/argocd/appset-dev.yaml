@@ -154,6 +154,12 @@ spec:
             params:
               - name: ui.image.repository
                 value: methylch3/yas-storefront
+              # Browser-facing API base must match the per-env storefront host
+              # (chart default lacks the .dev segment -> UI calls wrong domain).
+              - name: ui.extraEnvs[0].name
+                value: API_BASE_PATH
+              - name: ui.extraEnvs[0].value
+                value: http://storefront.dev.yas.local.com/api
           - service: backoffice-ui
             onprem: true
             params:

@@ -1,0 +1,44 @@
+# CronJob backup thư mục PKI (cert) — đi KÈM etcd snapshot để restore TRỌN VẸN
+# Cert nằm ở /etc/kubernetes/pki trên master. Image etcd không có tar → dùng busybox.
+# Lưu ý: chỉ backup cert tĩnh (ít đổi), nên tần suất thưa hơn etcd cũng được — ở đây để 6h cho đồng bộ.
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: pki-backup
+  namespace: kube-system
+spec:
+  schedule: "0 */6 * * *"          # mỗi 6h (khớp etcd-backup)
+  concurrencyPolicy: Forbid
+  successfulJobsHistoryLimit: 3
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        spec:
+          nodeName: yas-master            # cert chỉ có trên master
+          tolerations:
+            - operator: Exists
+          restartPolicy: OnFailure
+          containers:
+            - name: pki-backup
+              image: busybox:1.36          # có tar (khác image etcd)
+              command:
+                - sh
+                - -c
+                - "tar czf /backup/pki.tgz -C /etc/kubernetes pki && echo 'PKI backup saved: /backup/pki.tgz' && ls -lh /backup/pki.tgz"
+              volumeMounts:
+                - name: k8s-pki
+                  mountPath: /etc/kubernetes/pki
+                  readOnly: true
+                - name: backup-dir
+                  mountPath: /backup
+          volumes:
+            - name: k8s-pki
+              hostPath:
+                path: /etc/kubernetes/pki
+                type: Directory
+            - name: backup-dir
+              hostPath:
+                path: /var/backups/etcd      # cùng chỗ với etcd snapshot cho gọn
+                type: DirectoryOrCreate
