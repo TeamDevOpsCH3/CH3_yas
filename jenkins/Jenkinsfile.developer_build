@@ -415,6 +415,14 @@ EOF
   post {
     success {
       echo "developer_build completed"
+      script {
+        def deleteUrl = "${env.JENKINS_URL}job/delete_job/buildWithParameters?TARGET_NAMESPACE=dev-${params.TASK_ID}"
+        echo ""
+        echo "========================================="
+        echo "  C17 CLEANUP — Xoa moi truong test khi xong:"
+        echo "  ${deleteUrl}"
+        echo "========================================="
+      }
     }
 
     failure {
