@@ -153,6 +153,11 @@ spec:
             params:
               - name: ui.image.repository
                 value: methylch3/yas-storefront
+              # Browser-facing API base must match the per-env storefront host.
+              - name: ui.extraEnvs[0].name
+                value: API_BASE_PATH
+              - name: ui.extraEnvs[0].value
+                value: http://storefront.staging.yas.local.com/api
           - service: backoffice-ui
             onprem: true
             params:
