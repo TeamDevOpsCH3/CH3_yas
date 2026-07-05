@@ -1,0 +1,9 @@
+# Default STRICT mTLS cho toàn ns staging (song song peer-authentication-dev-strict.yaml).
+apiVersion: security.istio.io/v1
+kind: PeerAuthentication
+metadata:
+  name: default
+  namespace: staging
+spec:
+  mtls:
+    mode: STRICT

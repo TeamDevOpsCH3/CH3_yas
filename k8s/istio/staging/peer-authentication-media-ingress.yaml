@@ -1,0 +1,16 @@
+# PERMISSIVE media:80 @ ns staging (browser tải ảnh qua ingress api.staging/media).
+# Song song k8s/istio/peer-authentication-media-ingress.yaml (ns dev).
+apiVersion: security.istio.io/v1
+kind: PeerAuthentication
+metadata:
+  name: media-ingress
+  namespace: staging
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: media
+  mtls:
+    mode: STRICT
+  portLevelMtls:
+    "80":
+      mode: PERMISSIVE

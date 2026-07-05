@@ -1,0 +1,16 @@
+# PERMISSIVE swagger-ui:8080 @ ns staging (ingress api.staging/swagger-ui).
+# Song song k8s/istio/peer-authentication-swagger-ingress.yaml (ns dev).
+apiVersion: security.istio.io/v1
+kind: PeerAuthentication
+metadata:
+  name: swagger-ui-ingress
+  namespace: staging
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: swagger-ui
+  mtls:
+    mode: STRICT
+  portLevelMtls:
+    "8080":
+      mode: PERMISSIVE

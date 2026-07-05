@@ -1,0 +1,20 @@
+# =============================================================================
+# k8s/istio/staging/ — PeerAuthentication cho ns STAGING (main -> staging).
+# Self-contained (namespace: staging baked trong từng file — kustomize chặn
+# tham chiếu ../ ra ngoài thư mục). Song song bộ dev ở k8s/istio/ (giữ parity thủ công).
+#
+# Áp: kubectl apply -k k8s/istio/staging/   (dev vẫn: kubectl apply -k k8s/istio/)
+# Kết quả ns staging: default STRICT + PERMISSIVE port bff:80 / media:80 / swagger:8080
+# (ingress-nginx ngoài mesh). Intra-mesh vẫn mTLS STRICT.
+#
+# LƯU Ý: deny-order authz + retry VS của dev CHƯA nhân bản ở đây (deny-order có
+# principal cluster.local/ns/dev/sa/order -> cần đổi sang ns/staging khi bổ sung).
+# =============================================================================
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - peer-authentication-staging-strict.yaml
+  - peer-authentication-bff-ingress.yaml
+  - peer-authentication-media-ingress.yaml
+  - peer-authentication-swagger-ingress.yaml

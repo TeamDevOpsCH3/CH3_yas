@@ -28,6 +28,11 @@ rewrite name api.yas.local.com        swagger-ui.dev.svc.cluster.local      # th
 rewrite name storefront.dev.yas.local.com storefront-bff.dev.svc.cluster.local
 rewrite name backoffice.dev.yas.local.com backoffice-bff.dev.svc.cluster.local
 rewrite name api.dev.yas.local.com        swagger-ui.dev.svc.cluster.local
+# --- .staging per-env: target NAMESPACE = staging (không phải dev) ---
+#     main -> ns staging; SSR staging cũng cần resolve *.staging trong pod, thiếu -> 500
+rewrite name storefront.staging.yas.local.com storefront-bff.staging.svc.cluster.local
+rewrite name backoffice.staging.yas.local.com backoffice-bff.staging.svc.cluster.local
+rewrite name api.staging.yas.local.com        swagger-ui.staging.svc.cluster.local
 ```
 
 ## Cách áp dụng (KHÔNG apply đè thô — phải merge)
@@ -40,7 +45,7 @@ kubectl -n kube-system get configmap coredns -o yaml > /tmp/coredns-backup.yaml
 
 # Lấy Corefile, chèn 3 rewrite sau dòng identity
 kubectl -n kube-system get configmap coredns -o jsonpath='{.data.Corefile}' > /tmp/Corefile.cur
-sed -i '/rewrite name identity.yas.local.com/a\        rewrite name storefront.yas.local.com storefront-bff.dev.svc.cluster.local\n        rewrite name backoffice.yas.local.com backoffice-bff.dev.svc.cluster.local\n        rewrite name api.yas.local.com swagger-ui.dev.svc.cluster.local\n        rewrite name storefront.dev.yas.local.com storefront-bff.dev.svc.cluster.local\n        rewrite name backoffice.dev.yas.local.com backoffice-bff.dev.svc.cluster.local\n        rewrite name api.dev.yas.local.com swagger-ui.dev.svc.cluster.local' /tmp/Corefile.cur
+sed -i '/rewrite name identity.yas.local.com/a\        rewrite name storefront.yas.local.com storefront-bff.dev.svc.cluster.local\n        rewrite name backoffice.yas.local.com backoffice-bff.dev.svc.cluster.local\n        rewrite name api.yas.local.com swagger-ui.dev.svc.cluster.local\n        rewrite name storefront.dev.yas.local.com storefront-bff.dev.svc.cluster.local\n        rewrite name backoffice.dev.yas.local.com backoffice-bff.dev.svc.cluster.local\n        rewrite name api.dev.yas.local.com swagger-ui.dev.svc.cluster.local\n        rewrite name storefront.staging.yas.local.com storefront-bff.staging.svc.cluster.local\n        rewrite name backoffice.staging.yas.local.com backoffice-bff.staging.svc.cluster.local\n        rewrite name api.staging.yas.local.com swagger-ui.staging.svc.cluster.local' /tmp/Corefile.cur
 
 # Apply + reload
 kubectl -n kube-system create configmap coredns --from-file=Corefile=/tmp/Corefile.cur \
