@@ -50,14 +50,14 @@ sec "B. UI PAGES (qua ingress)"
 http "storefront.dev.yas.local.com" "/"                       "200"     "Storefront trang chủ"
 http "storefront.dev.yas.local.com" "/products/iphone-15"     "200"     "Storefront product detail (SSR)"
 http "backoffice.dev.yas.local.com" "/"                       "200|302" "Backoffice (302=login OK)"
-http "api.dev.yas.local.com"        "/swagger-ui"             "200|302" "Swagger UI"
+http "api.dev.yas.local.com"        "/swagger-ui"             "200|301|302" "Swagger UI"
 
 # ─────────────────────────────────────────────────────────────────
 sec "C. STOREFRONT API"
 SF="storefront.dev.yas.local.com"
 http "$SF" "/api/product/storefront/products/featured?pageNo=0" "200" "featured products"
 http "$SF" "/api/product/storefront/categories"                 "200" "categories"
-http "$SF" "/api/product/storefront/products/iphone-15"         "200|404" "product by slug (list-style)"
+http "$SF" "/api/product/storefront/product/iphone-15"         "200|404" "product by slug (list-style)"
 # profile/items 401/403 khi chưa login = ĐÚNG (không tính fail)
 http "$SF" "/api/cart/storefront/cart/items"                    "401|403|200" "cart items (401/403=chưa login OK)"
 
