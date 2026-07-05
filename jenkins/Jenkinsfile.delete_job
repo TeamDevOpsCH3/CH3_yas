@@ -1,0 +1,115 @@
+pipeline {
+  agent { label 'build-agent' }
+
+  parameters {
+    string(
+      name: 'TARGET_NAMESPACE',
+      defaultValue: '',
+      description: 'Namespace tạm cần xóa (dạng dev-<task-id>). VD: dev-fixcart'
+    )
+  }
+
+  stages {
+    stage('Guardrail') {
+      steps {
+        script {
+          def ns = params.TARGET_NAMESPACE.trim().toLowerCase()
+
+          if (ns == '') {
+            error('TARGET_NAMESPACE khong duoc de trong.')
+          }
+
+          // Chi cho phep xoa namespace dang dev-<something>
+          if (!ns.matches('^dev-[a-z0-9-]+$')) {
+            error("Namespace '${ns}' khong hop le. Chi xoa namespace dang 'dev-<task-id>'.")
+          }
+
+          // Bao ve cac namespace he thong va production
+          def protectedNamespaces = [
+            'dev', 'yas', 'staging', 'yas-infra',
+            'postgres', 'kafka', 'elasticsearch', 'redis',
+            'argocd', 'istio-system',
+            'default', 'kube-system', 'kube-public', 'kube-node-lease'
+          ]
+          if (protectedNamespaces.contains(ns)) {
+            error("SECURITY: '${ns}' la namespace he thong, tuyet doi khong duoc xoa.")
+          }
+
+          echo "Namespace '${ns}' hop le. Tien hanh cleanup..."
+          env.CLEAN_NS = ns
+        }
+      }
+    }
+
+    stage('Helm Uninstall') {
+      steps {
+        withCredentials([file(credentialsId: 'kubeconfig-cred', variable: 'KUBECONFIG')]) {
+          sh '''
+            set -e
+            export PATH="$HOME/bin:$PATH"
+
+            echo "=== Helm releases trong $CLEAN_NS ==="
+            helm list -n "$CLEAN_NS" || true
+
+            RELEASES=$(helm list -n "$CLEAN_NS" -q 2>/dev/null || true)
+            if [ -n "$RELEASES" ]; then
+              for rel in $RELEASES; do
+                echo "Uninstalling: $rel"
+                helm uninstall "$rel" -n "$CLEAN_NS"
+              done
+            else
+              echo "Khong co Helm release nao trong $CLEAN_NS."
+            fi
+          '''
+        }
+      }
+    }
+
+    stage('Delete Namespace') {
+      steps {
+        withCredentials([file(credentialsId: 'kubeconfig-cred', variable: 'KUBECONFIG')]) {
+          sh '''
+            set -e
+            export PATH="$HOME/bin:$PATH"
+
+            echo "=== Trang thai truoc khi xoa ==="
+            kubectl get pods -n "$CLEAN_NS" --no-headers 2>/dev/null || true
+            kubectl get svc  -n "$CLEAN_NS" --no-headers 2>/dev/null || true
+
+            echo "Deleting namespace: $CLEAN_NS ..."
+            kubectl delete namespace "$CLEAN_NS" --timeout=120s
+
+            echo ""
+            echo "Namespace $CLEAN_NS da duoc xoa."
+          '''
+        }
+      }
+    }
+
+    stage('Verify') {
+      // Confirm namespace khong con ton tai
+      steps {
+        withCredentials([file(credentialsId: 'kubeconfig-cred', variable: 'KUBECONFIG')]) {
+          sh '''
+            export PATH="$HOME/bin:$PATH"
+            if kubectl get namespace "$CLEAN_NS" 2>/dev/null; then
+              echo "WARN: Namespace van con - co the dang Terminating."
+              kubectl get namespace "$CLEAN_NS"
+            else
+              echo "PASS: Namespace $CLEAN_NS da bi xoa hoan toan."
+            fi
+          '''
+        }
+      }
+    }
+  }
+
+  post {
+    success {
+      echo "delete_job completed: ${env.CLEAN_NS} da duoc don dep."
+    }
+    failure {
+      echo "delete_job FAILED. Kiem tra guardrail log phia tren."
+    }
+  }
+}
