@@ -5,6 +5,7 @@ resources:
   - peer-authentication-dev-strict.yaml
   - peer-authentication-bff-ingress.yaml
   - peer-authentication-media-ingress.yaml
+  - peer-authentication-swagger-ingress.yaml
   - authorization-policy-product-deny-order.yaml
   - virtual-service-tax-retry.yaml
   - virtual-service-product-retry.yaml
