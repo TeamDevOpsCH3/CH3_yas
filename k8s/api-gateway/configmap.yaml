@@ -1,0 +1,65 @@
+# =============================================================================
+# api-gateway nginx config — IN-MESH gateway (có Istio sidecar).
+# Mấu chốt: proxy_http_version 1.1 (nginx mặc định HTTP/1.0 -> Istio sniffing
+# trên listener chung port 80 phân loại nhầm -> TCP PassthroughCluster -> plaintext
+# -> backend STRICT reset). HTTP/1.1 -> Envoy route HTTP -> ORIGINATE mTLS -> backend
+# STRICT nhận. => backend giữ STRICT, KHÔNG cần PERMISSIVE, KHÔNG cần appProtocol.
+#
+# proxy_pass TĨNH (FQDN, không dùng biến/resolver) — biến+resolver tái hiện passthrough.
+# Chỉ list service ĐÃ deploy ở ns dev (8/12). Thiếu service -> nginx [emerg] crash.
+# (rating/promotion/location/payment CHƯA deploy dev -> thêm block khi deploy.)
+# =============================================================================
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: api-gateway-conf
+  namespace: dev
+data:
+  default.conf: |
+    server {
+      listen 8080;
+      proxy_http_version 1.1;
+      proxy_set_header Connection "";
+
+      # --- Swagger UI (gw ôm luôn để cutover thành api-gateway duy nhất) ---
+      location /swagger-ui/ {
+        proxy_set_header Host swagger-ui.dev.svc.cluster.local;
+        proxy_pass http://swagger-ui.dev.svc.cluster.local:8080;
+      }
+
+      # --- Media (ảnh + spec) ---
+      location /media/ {
+        proxy_set_header Host media.dev.svc.cluster.local;
+        proxy_pass http://media.dev.svc.cluster.local:80;
+      }
+
+      # --- 8 backend deployed ở dev: spec /<svc>/v3/api-docs + "Try it out" /<svc>/** ---
+      location /product/ {
+        proxy_set_header Host product.dev.svc.cluster.local;
+        proxy_pass http://product.dev.svc.cluster.local:80;
+      }
+      location /cart/ {
+        proxy_set_header Host cart.dev.svc.cluster.local;
+        proxy_pass http://cart.dev.svc.cluster.local:80;
+      }
+      location /order/ {
+        proxy_set_header Host order.dev.svc.cluster.local;
+        proxy_pass http://order.dev.svc.cluster.local:80;
+      }
+      location /customer/ {
+        proxy_set_header Host customer.dev.svc.cluster.local;
+        proxy_pass http://customer.dev.svc.cluster.local:80;
+      }
+      location /inventory/ {
+        proxy_set_header Host inventory.dev.svc.cluster.local;
+        proxy_pass http://inventory.dev.svc.cluster.local:80;
+      }
+      location /tax/ {
+        proxy_set_header Host tax.dev.svc.cluster.local;
+        proxy_pass http://tax.dev.svc.cluster.local:80;
+      }
+      location /search/ {
+        proxy_set_header Host search.dev.svc.cluster.local;
+        proxy_pass http://search.dev.svc.cluster.local:80;
+      }
+    }
