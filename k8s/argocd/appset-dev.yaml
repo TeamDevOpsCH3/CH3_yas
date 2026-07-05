@@ -112,6 +112,10 @@ spec:
               # Serve product/category images at api.dev.../media (matches publicUrl)
               - name: backend.ingress.host
                 value: api.dev.yas.local.com
+              # Cutover Option 1: api-gateway ôm /media trên api.dev -> tắt ingress
+              # trực tiếp của media (gw reach media qua mТLS). initContainer /images giữ.
+              - name: backend.ingress.enabled
+                value: "false"
           - service: search
             onprem: false
             params:
@@ -177,6 +181,10 @@ spec:
               # OpenAPI spec URLs point at api.${domain} (browser-facing, per-env)
               - name: domain
                 value: dev.yas.local.com
+              # Cutover Option 1: api-gateway (in-mesh) ôm /swagger-ui trên api.dev
+              # -> tắt ingress trực tiếp của swagger-ui (gw reach swagger qua mТLS).
+              - name: ingress.enabled
+                value: "false"
   template:
     metadata:
       name: 'yas-dev-{{ .service }}'

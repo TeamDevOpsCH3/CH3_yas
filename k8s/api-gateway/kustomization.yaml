@@ -13,4 +13,5 @@ resources:
   - configmap.yaml
   - deployment.yaml
   - peer-authentication.yaml
-  - ingress-test.yaml
+  - ingress.yaml         # api.dev (production cutover)
+  - ingress-test.yaml    # api-test.dev (fallback — xoá sau khi cutover ổn định)

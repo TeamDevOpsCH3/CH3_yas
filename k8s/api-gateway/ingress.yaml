@@ -1,0 +1,21 @@
+# INGRESS PRODUCTION — api.dev.yas.local.com -> api-gateway (in-mesh) -> mТLS -> backend.
+# Cutover Option 1: gw ôm /swagger-ui + /media + /<svc>/v3/api-docs.
+# (ingress-test.yaml host api-test.dev GIỮ làm fallback tới khi cutover ổn định.)
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: api-gateway
+  namespace: dev
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: api.dev.yas.local.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: api-gateway
+                port:
+                  number: 8080

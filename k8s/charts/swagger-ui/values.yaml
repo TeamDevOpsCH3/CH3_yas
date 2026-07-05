@@ -41,18 +41,18 @@ securityContext: {}
 # `urls` is rendered through `tpl` in the Deployment so this substitutes in.
 domain: yas.local.com
 baseUrl: /swagger-ui
-urls: "[{ url: 'http://api.{{ .Values.domain }}/product/v3/api-docs', name: 'Product' },
-      { url: 'http://api.{{ .Values.domain }}/media/v3/api-docs', name: 'Media' },
-      { url: 'http://api.{{ .Values.domain }}/customer/v3/api-docs', name: 'Customer' }, 
-      { url: 'http://api.{{ .Values.domain }}/cart/v3/api-docs', name: 'Cart'},
-      { url: 'http://api.{{ .Values.domain }}/rating/v3/api-docs', name: 'Rating' }, 
-      { url: 'http://api.{{ .Values.domain }}/order/v3/api-docs', name: 'Order'},
-      { url: 'http://api.{{ .Values.domain }}/payment/v3/api-docs', name: 'Payment'},
-      { url: 'http://api.{{ .Values.domain }}/location/v3/api-docs', name: 'Location'}, 
-      { url: 'http://api.{{ .Values.domain }}/inventory/v3/api-docs', name: 'Inventory'},
-      { url: 'http://api.{{ .Values.domain }}/tax/v3/api-docs', name: 'Tax' },
-      { url: 'http://api.{{ .Values.domain }}/promotion/v3/api-docs', name: 'Promotion'},
-      { url: 'http://api.{{ .Values.domain }}/search/v3/api-docs', name: 'Search'}]"
+urls: "[{ url: '/product/v3/api-docs', name: 'Product' },
+      { url: '/media/v3/api-docs', name: 'Media' },
+      { url: '/customer/v3/api-docs', name: 'Customer' }, 
+      { url: '/cart/v3/api-docs', name: 'Cart'},
+      { url: '/rating/v3/api-docs', name: 'Rating' }, 
+      { url: '/order/v3/api-docs', name: 'Order'},
+      { url: '/payment/v3/api-docs', name: 'Payment'},
+      { url: '/location/v3/api-docs', name: 'Location'}, 
+      { url: '/inventory/v3/api-docs', name: 'Inventory'},
+      { url: '/tax/v3/api-docs', name: 'Tax' },
+      { url: '/promotion/v3/api-docs', name: 'Promotion'},
+      { url: '/search/v3/api-docs', name: 'Search'}]"
 
 service:
   type: ClusterIP
