@@ -53,6 +53,13 @@ $SSH "root@$MASTER_IP" "kubeadm init \
   --pod-network-cidr=$POD_CIDR \
   --node-name=yas-master"
 
+echo "[2b/6] Setup DNS nhóm (dnsmasq + Tailscale Split DNS)..."
+# dnsmasq trên master resolve *.yas.local.com → master IP cho client nhóm.
+# Cặp với Tailscale admin Split DNS: yas.local.com → $MASTER_IP (config 1 lần, thủ công).
+$SSH "root@$MASTER_IP" 'bash -s' < k8s/deploy/dns/setup-dnsmasq-master.sh || \
+  echo "  ⚠️  dnsmasq setup lỗi — kiểm tailscale0 up trên master chưa. Cụm vẫn chạy, chỉ DNS nhóm cần setup tay."
+echo "    → Nhớ: Tailscale admin Split DNS (yas.local.com → $MASTER_IP) giữ nguyên, KHÔNG mất khi rebuild."
+
 # kubeconfig trên master + node-ip
 $SSH "root@$MASTER_IP" "mkdir -p \$HOME/.kube && \
   cp -f /etc/kubernetes/admin.conf \$HOME/.kube/config && \
