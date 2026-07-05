@@ -20,9 +20,14 @@ Thêm rewrite vào CoreDNS Corefile cho pod resolve `*.yas.local.com` → servic
 
 ```
 rewrite name identity.yas.local.com   identity.keycloak.svc.cluster.local   # có sẵn (C14 - Hoàng)
-rewrite name storefront.yas.local.com storefront-bff.dev.svc.cluster.local  # thêm (C15)
-rewrite name backoffice.yas.local.com backoffice-bff.dev.svc.cluster.local  # thêm (C15)
-rewrite name api.yas.local.com        swagger-ui.dev.svc.cluster.local      # thêm (C15)
+rewrite name storefront.yas.local.com storefront-bff.dev.svc.cluster.local  # thêm (C15, legacy non-.dev)
+rewrite name backoffice.yas.local.com backoffice-bff.dev.svc.cluster.local  # thêm (C15, legacy non-.dev)
+rewrite name api.yas.local.com        swagger-ui.dev.svc.cluster.local      # thêm (C15, legacy non-.dev)
+# --- .dev per-env: API_BASE_PATH/publicUrl dùng *.dev.yas.local.com -> SSR (getServerSideProps)
+#     trong pod phải resolve được, nếu thiếu -> ENOTFOUND -> product detail 500 ---
+rewrite name storefront.dev.yas.local.com storefront-bff.dev.svc.cluster.local
+rewrite name backoffice.dev.yas.local.com backoffice-bff.dev.svc.cluster.local
+rewrite name api.dev.yas.local.com        swagger-ui.dev.svc.cluster.local
 ```
 
 ## Cách áp dụng (KHÔNG apply đè thô — phải merge)
@@ -35,7 +40,7 @@ kubectl -n kube-system get configmap coredns -o yaml > /tmp/coredns-backup.yaml
 
 # Lấy Corefile, chèn 3 rewrite sau dòng identity
 kubectl -n kube-system get configmap coredns -o jsonpath='{.data.Corefile}' > /tmp/Corefile.cur
-sed -i '/rewrite name identity.yas.local.com/a\        rewrite name storefront.yas.local.com storefront-bff.dev.svc.cluster.local\n        rewrite name backoffice.yas.local.com backoffice-bff.dev.svc.cluster.local\n        rewrite name api.yas.local.com swagger-ui.dev.svc.cluster.local' /tmp/Corefile.cur
+sed -i '/rewrite name identity.yas.local.com/a\        rewrite name storefront.yas.local.com storefront-bff.dev.svc.cluster.local\n        rewrite name backoffice.yas.local.com backoffice-bff.dev.svc.cluster.local\n        rewrite name api.yas.local.com swagger-ui.dev.svc.cluster.local\n        rewrite name storefront.dev.yas.local.com storefront-bff.dev.svc.cluster.local\n        rewrite name backoffice.dev.yas.local.com backoffice-bff.dev.svc.cluster.local\n        rewrite name api.dev.yas.local.com swagger-ui.dev.svc.cluster.local' /tmp/Corefile.cur
 
 # Apply + reload
 kubectl -n kube-system create configmap coredns --from-file=Corefile=/tmp/Corefile.cur \

@@ -65,16 +65,16 @@ kubectl -n ingress-nginx rollout status deploy/ingress-nginx-controller --timeou
 
 log "[3/7] CoreDNS rewrite cho SSR (*.yas.local.com -> service noi bo)"
 if kubectl -n kube-system get configmap coredns -o jsonpath='{.data.Corefile}' \
-     | grep -q 'rewrite name storefront.yas.local.com'; then
-  warn "CoreDNS rewrite storefront da co - bo qua."
+     | grep -q 'rewrite name storefront.dev.yas.local.com'; then
+  warn "CoreDNS rewrite storefront.dev da co - bo qua."
 else
   log "Them rewrite vao CoreDNS (backup truoc)"
   kubectl -n kube-system get configmap coredns -o yaml > "/tmp/coredns-backup-$(date +%s).yaml"
   kubectl -n kube-system get configmap coredns -o jsonpath='{.data.Corefile}' > /tmp/Corefile.cur
   if grep -q 'rewrite name identity.yas.local.com' /tmp/Corefile.cur; then
-    sed -i '/rewrite name identity.yas.local.com/a\        rewrite name storefront.yas.local.com storefront-bff.dev.svc.cluster.local\n        rewrite name backoffice.yas.local.com backoffice-bff.dev.svc.cluster.local\n        rewrite name api.yas.local.com swagger-ui.dev.svc.cluster.local' /tmp/Corefile.cur
+    sed -i '/rewrite name identity.yas.local.com/a\        rewrite name storefront.yas.local.com storefront-bff.dev.svc.cluster.local\n        rewrite name backoffice.yas.local.com backoffice-bff.dev.svc.cluster.local\n        rewrite name api.yas.local.com swagger-ui.dev.svc.cluster.local\n        rewrite name storefront.dev.yas.local.com storefront-bff.dev.svc.cluster.local\n        rewrite name backoffice.dev.yas.local.com backoffice-bff.dev.svc.cluster.local\n        rewrite name api.dev.yas.local.com swagger-ui.dev.svc.cluster.local' /tmp/Corefile.cur
   else
-    sed -i '/ready/a\        rewrite name identity.yas.local.com identity.keycloak.svc.cluster.local\n        rewrite name storefront.yas.local.com storefront-bff.dev.svc.cluster.local\n        rewrite name backoffice.yas.local.com backoffice-bff.dev.svc.cluster.local\n        rewrite name api.yas.local.com swagger-ui.dev.svc.cluster.local' /tmp/Corefile.cur
+    sed -i '/ready/a\        rewrite name identity.yas.local.com identity.keycloak.svc.cluster.local\n        rewrite name storefront.yas.local.com storefront-bff.dev.svc.cluster.local\n        rewrite name backoffice.yas.local.com backoffice-bff.dev.svc.cluster.local\n        rewrite name api.yas.local.com swagger-ui.dev.svc.cluster.local\n        rewrite name storefront.dev.yas.local.com storefront-bff.dev.svc.cluster.local\n        rewrite name backoffice.dev.yas.local.com backoffice-bff.dev.svc.cluster.local\n        rewrite name api.dev.yas.local.com swagger-ui.dev.svc.cluster.local' /tmp/Corefile.cur
   fi
   kubectl -n kube-system create configmap coredns --from-file=Corefile=/tmp/Corefile.cur --dry-run=client -o yaml | kubectl apply -f -
   kubectl -n kube-system rollout restart deploy/coredns
