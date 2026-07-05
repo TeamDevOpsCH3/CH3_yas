@@ -172,6 +172,9 @@ spec:
             params:
               - name: ingress.host
                 value: api.staging.yas.local.com
+              # OpenAPI spec URLs point at api.${domain} (browser-facing, per-env)
+              - name: domain
+                value: staging.yas.local.com
   template:
     metadata:
       name: 'yas-staging-{{ .service }}'
