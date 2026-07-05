@@ -6,15 +6,43 @@ backend:
   nameOverride: media
   fullnameOverride: media
   databaseName: media
+  # Route api.${DOMAIN}/media -> media:80 (host overridden per-env via ApplicationSet).
+  # media uses FileSystemRepository, serving files seeded into /images by the init below.
   ingress:
-    enabled: false
+    enabled: true
+    host: api.yas.local.com
+    path: /media
+    pathType: Prefix
+  # Seed sample images (repo: sampledata/images) into an emptyDir at /images on every
+  # pod start. Anti node-flap (re-created each start, no PVC). Config-only: no app/seed edit.
+  initContainers:
+    - name: seed-media-images
+      image: alpine/git:2.45.2
+      command: ["/bin/sh", "-c"]
+      args:
+        - |
+          set -eu
+          rm -rf /tmp/seed
+          git clone --depth 1 --filter=blob:none --sparse \
+            https://github.com/TeamDevOpsCH3/CH3_yas /tmp/seed
+          cd /tmp/seed
+          git sparse-checkout set sampledata/images
+          cp -a sampledata/images/. /images/
+          echo "seeded $(find /images -type f | wc -l) files into /images"
+      volumeMounts:
+        - name: images
+          mountPath: /images
   extraVolumes:
     - name: media-application
       configMap:
         name: media-application-configmap
+    - name: images
+      emptyDir: {}
   extraVolumeMounts:
     - name: media-application
       mountPath: /opt/yas/media
+    - name: images
+      mountPath: /images
   extraApplicationConfigPaths:
     - /opt/yas/media/media-application.yaml
 

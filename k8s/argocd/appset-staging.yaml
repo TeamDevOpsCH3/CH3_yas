@@ -108,6 +108,9 @@ spec:
               - name: backend.extraEnvs[0].value
                 value: "5"
                 forceString: true
+              # Serve product/category images at api.staging.../media (matches publicUrl)
+              - name: backend.ingress.host
+                value: api.staging.yas.local.com
           - service: search
             onprem: false
             params:
