@@ -1,0 +1,27 @@
+# =============================================================================
+# peer-authentication-media-ingress.yaml
+# media phục vụ ảnh sản phẩm/category TRỰC TIẾP qua ingress: api.${DOMAIN}/media.
+# ingress-nginx NẰM NGOÀI mesh (không sidecar) -> gửi plaintext vào media (có
+# sidecar). PeerAuthentication default STRICT -> media từ chối plaintext -> 502.
+# Nới PERMISSIVE riêng PORT app 80 của media (giống peer-authentication-bff-ingress).
+# Traffic nội mesh (service <-> media) vẫn mTLS STRICT; chỉ cổng 80 nhận cả plaintext.
+# -----------------------------------------------------------------------------
+# ⚠️ BẢO MẬT: đây là ĐIỂM VÀO plaintext MỚI, ngoài 2 bff đã thống nhất (C24).
+# Cần vì browser tải ảnh trực tiếp từ media qua ingress (publicUrl=api.${DOMAIN}/media).
+# Chỉ mở port 80; mọi thứ khác giữ STRICT. Cân nhắc thay thế bằng việc đưa
+# ingress-nginx vào mesh (khi đó bỏ được mọi PERMISSIVE port-level cho ingress).
+# =============================================================================
+apiVersion: security.istio.io/v1
+kind: PeerAuthentication
+metadata:
+  name: media-ingress
+  namespace: dev
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: media
+  mtls:
+    mode: STRICT
+  portLevelMtls:
+    "80":
+      mode: PERMISSIVE
