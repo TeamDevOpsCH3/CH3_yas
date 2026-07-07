@@ -6,10 +6,14 @@ spec:
   instanceSelector:
     matchLabels:
       dashboards: "grafana"
-  url: "https://grafana.com/api/dashboards/4701/revisions/10/download"
+  # 17582 "JMX Overview (OpenTelemetry)" — query OTel semconv (jvm_memory_type=heap,
+  # jvm_memory_pool_name, jvm_gc_duration_seconds, jvm_thread_count) khớp metrics
+  # javaagent của ta. (4701 cũ = Micrometer, label area= -> No data.)
+  # Datasource input của 17582 tên DS_THANOS (plugin prometheus) -> map vào DS "prometheus".
+  url: "https://grafana.com/api/dashboards/17582/revisions/2/download"
   datasources:
     - datasourceName: prometheus
-      inputName: DS_PROMETHEUS
+      inputName: DS_THANOS
 ---
 apiVersion: grafana.integreatly.org/v1beta1
 kind: GrafanaDashboard
