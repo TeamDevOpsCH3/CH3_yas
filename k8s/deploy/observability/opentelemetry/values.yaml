@@ -22,14 +22,35 @@ opentelemetryCollectorConfig:
           endpoint: 0.0.0.0:4318
   processors:
     batch: {}
+    # Dashboard JVM 4701 query biến $application; OTel semconv chỉ có service.name.
+    # Copy service.name -> resource attr `application`; resource_to_telemetry_conversion
+    # (trên prometheusremotewrite) sẽ emit thành label metric `application`.
+    resource/application:
+      attributes:
+        - key: application
+          from_attribute: service.name
+          action: insert
   exporters:
     debug:
       verbosity: detailed
     otlphttp:
       endpoint: http://tempo:4318
+    # Push metrics -> Prometheus remote-write (receiver đã bật --web.enable-remote-write-receiver).
+    # Cần image contrib (bản -k8s thiếu exporter này). resource_to_telemetry_conversion:
+    # đưa resource attrs (service.name...) thành label metric -> nhận diện service.
+    prometheusremotewrite:
+      endpoint: http://prometheus-kube-prometheus-prometheus.observability:9090/api/v1/write
+      tls:
+        insecure: true
+      resource_to_telemetry_conversion:
+        enabled: true
   service:
     pipelines:
       traces:
         receivers: [otlp]
         processors: [batch]
         exporters: [otlphttp]
+      metrics:
+        receivers: [otlp]
+        processors: [resource/application, batch]
+        exporters: [prometheusremotewrite]
