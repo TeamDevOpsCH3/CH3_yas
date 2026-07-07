@@ -234,6 +234,11 @@ pipeline {
                     echo "Force run all: ${params.FORCE_RUN_ALL}"
                     echo "Services to run: ${env.SERVICES_TO_RUN ?: '(none)'}"
                 }
+                // built-in da co implicit checkout (khong skipDefaultCheckout) -> stash source
+                // 1 lan. Parallel unstash thay vi ~14 `checkout scm` dong thoi -> tranh saturate
+                // network burst cua EC2 build-agent (root cause checkout timeout). Loai .git (default
+                // excludes) vi mvn test/package khong can git; Build&Push prep giu checkout rieng.
+                stash name: 'source'
             }
         }
 
@@ -271,7 +276,7 @@ pipeline {
                                             "PATH+JDK=${jdkHome}/bin"
                                         ]) {
                                             try {
-                                                checkout scm
+                                                retry(3) { unstash 'source' }
                                                 echo ">>> Parallel Task: ${s.display}"
                                                 timeout(time: 45, unit: 'MINUTES') {
                                                     runServicePipeline(s)
@@ -309,7 +314,19 @@ pipeline {
 
                     // B1. Chuẩn bị 1 lần: danh sách build + tag + docker login + builder (host dùng chung)
                     node('build-agent') {
-                        checkout scm
+                        // Prep can .git (git rev-parse HEAD -> commit tag) -> giu checkout nhung
+                        // SHALLOW depth=1 + noTags (nhe network) + retry cho network chap chon.
+                        retry(3) {
+                            checkout([
+                                $class: 'GitSCM',
+                                branches: scm.branches,
+                                userRemoteConfigs: scm.userRemoteConfigs,
+                                extensions: scm.extensions + [
+                                    [$class: 'CloneOption', shallow: true, depth: 1, noTags: true, timeout: 30],
+                                    [$class: 'CheckoutOption', timeout: 30]
+                                ]
+                            ])
+                        }
                         def servicesToRun = env.SERVICES_TO_RUN
                             ? env.SERVICES_TO_RUN.split(',').toList()
                             : []
@@ -377,7 +394,9 @@ pipeline {
                                         "IMAGE_NAME=${imageName}"
                                     ]) {
                                         try {
-                                            checkout scm
+                                            // Build (mvn package + docker build) khong can .git -> unstash
+                                            // source (0 network) thay checkout scm (chunk 2 -> nhe hon Test).
+                                            retry(3) { unstash 'source' }
                                             echo "Building and pushing image for ${svc.display} with tag ${commitTag}"
                                             if ((svc.buildTool ?: 'maven') == 'maven') {
                                                 sh 'mvn package -pl "${SERVICE_ID}" -am -DskipTests -B --no-transfer-progress'
