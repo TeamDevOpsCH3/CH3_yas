@@ -1,0 +1,34 @@
+# Bitnami Kafka — values for YAS cluster (CH3)
+# Replaces: Strimzi operator + ZooKeeper (*.operator.bak/)
+# Reason: Strimzi overhead ~400MB; Kafka 4.0 uses KRaft (ZooKeeper removed)
+
+# Must match bootstrap server configured in YAS apps:
+#   kafka-cluster-kafka-brokers.kafka.svc.cluster.local:9092
+fullnameOverride: kafka-cluster-kafka-brokers
+
+# Bitnami moved newer chart versions to bitnamilegacy registry.
+# Pin to match actual running image on cluster.
+image:
+  repository: bitnamilegacy/kafka
+
+controller:
+  replicaCount: 3  # KRaft: controllers also act as brokers
+
+  resources:
+    requests:
+      memory: 768Mi
+      cpu: 500m
+    limits:
+      memory: 1280Mi  # 768Mi causes OOMKilled (exit 137) under load
+      cpu: 750m
+
+  ephemeralStorage:
+    requests: 50Mi
+    limits: 2Gi
+
+  nodeSelector:
+    node-type: cloud
+
+listeners:
+  client:
+    protocol: PLAINTEXT  # internal cluster; TLS not required

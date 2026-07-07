@@ -5,8 +5,7 @@ postgresql:
   password: admin
 kafka:
   replicas: 1
-zookeeper:
-  replicas: 1
+  # KRaft mode (Bitnami Kafka 4.0) — ZooKeeper không còn được dùng
 elasticsearch:
   replicas: 1
   username: yas

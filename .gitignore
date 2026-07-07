@@ -30,3 +30,12 @@ hs_err_pid*
 .vscode
 *.iml
 .DS_Store
+
+*id_auto*
+*.tgz
+*.db
+# PKI backup archives only — do NOT ignore pki-*.yaml manifests (e.g. k8s/ops/pki-backup-cronjob.yaml)
+pki-*.tgz
+# AI-generated reports (local only, not versioned)
+docs-ai/
+.claude/

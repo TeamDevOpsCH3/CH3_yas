@@ -1,0 +1,30 @@
+# Overlay "demo hybrid": service nhẹ ƯU TIÊN MỀM chạy trên POOL on-prem
+# (mọi node gắn nhãn node-type=onprem — máy Hiệp `laptop-nfigfmr1` + máy Hòa `worker-hoa`).
+# Áp THÊM sau values-<env>.yaml:  helm -f values-<env>.yaml -f values-onprem.yaml
+#
+# Vì Helm THAY-THẾ (không merge) list khi chồng -f, khối preferred ở đây ĐÈ khối
+# "ưu tiên cloud" của values-<env> → service này ưu tiên on-prem (weight 100).
+#
+# Hành vi:
+#   • 1 hoặc cả 2 máy on-prem BẬT → scheduler tự RẢI pod nhẹ lên pool on-prem (khoe hybrid).
+#   • Cả 2 máy on-prem TẮT → không node nào khớp preference (mềm) → pod tự lên droplet.
+#   • preferred = ưu tiên, KHÔNG bắt buộc → không bao giờ kẹt Pending.
+#
+# 3 khối cho 3 họ chart: backend.* (Java/BFF), ui.* (2 UI), và affinity top-level (swagger-ui).
+# Chart nào không dùng khối kia thì Helm bỏ qua (vô hại).
+
+_onpremPref: &onpremPref
+  nodeAffinity:
+    preferredDuringSchedulingIgnoredDuringExecution:
+      - weight: 100
+        preference:
+          matchExpressions:
+            - key: node-type
+              operator: In
+              values: ["onprem"]
+
+backend:
+  affinity: *onpremPref
+ui:
+  affinity: *onpremPref
+affinity: *onpremPref          # cho swagger-ui (key affinity nằm top-level)

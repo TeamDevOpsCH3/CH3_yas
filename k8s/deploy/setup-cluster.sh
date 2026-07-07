@@ -1,123 +1,128 @@
 #!/bin/bash
-set -x
+# setup-cluster.sh — Deploy shared infrastructure for YAS cluster.
+# Data store uses Bitnami (replaces Zalando/Strimzi/ECK operators; see *.operator.bak/).
+# Observability stack unchanged from upstream.
+#
+# Usage:
+#   ./setup-cluster.sh [all|datastore|observability]  (default: all)
+#
+# Call order:
+#   ./setup-cluster.sh → ./setup-keycloak.sh → ./setup-redis.sh
+#   → ./deploy-yas-configuration.sh <env> → ./deploy-yas-applications.sh <env>
+set -euo pipefail
 
-# Add chart repos and update
-helm repo add postgres-operator-charts https://opensource.zalando.com/postgres-operator/charts/postgres-operator
-helm repo add strimzi https://strimzi.io/charts/
-helm repo add akhq https://akhq.io/
-helm repo add elastic https://helm.elastic.co
-helm repo add grafana https://grafana.github.io/helm-charts
-helm repo add prometheus-community https://prometheus-community.github.io/helm-charts
-helm repo add open-telemetry https://open-telemetry.github.io/opentelemetry-helm-charts
-helm repo add jetstack https://charts.jetstack.io
-helm repo update
+MODE="${1:-all}"
 
-#Read configuration value from cluster-config.yaml file
-read -rd '' DOMAIN POSTGRESQL_REPLICAS POSTGRESQL_USERNAME POSTGRESQL_PASSWORD \
-KAFKA_REPLICAS ZOOKEEPER_REPLICAS ELASTICSEARCH_REPLICAES \
-GRAFANA_USERNAME GRAFANA_PASSWORD \
-< <(yq -r '.domain, .postgresql.replicas, .postgresql.username,
- .postgresql.password, .kafka.replicas, .zookeeper.replicas,
- .elasticsearch.replicas, .grafana.username, .grafana.password' ./cluster-config.yaml)
+read -rd '' DOMAIN POSTGRESQL_USERNAME POSTGRESQL_PASSWORD \
+  GRAFANA_USERNAME GRAFANA_PASSWORD \
+  < <(yq -r '.domain,
+    .postgresql.username, .postgresql.password,
+    .grafana.username, .grafana.password' ./cluster-config.yaml) || true
 
-# Install the postgres-operator
-helm upgrade --install postgres-operator postgres-operator-charts/postgres-operator \
- --create-namespace --namespace postgres
+setup_datastore() {
+  helm repo add bitnami https://charts.bitnami.com/bitnami 2>/dev/null || true
+  helm repo add akhq    https://akhq.io/                  2>/dev/null || true
+  helm repo update
 
-#Install postgresql
-helm upgrade --install postgres ./postgres/postgresql \
---create-namespace --namespace postgres \
---set replicas="$POSTGRESQL_REPLICAS" \
---set username="$POSTGRESQL_USERNAME" \
---set password="$POSTGRESQL_PASSWORD"
+  echo "[postgres] deploying..."
+  helm upgrade --install postgresql bitnami/postgresql \
+    --create-namespace --namespace postgres \
+    -f ./postgres/values-bitnami.yaml
+  bash ./postgres/create-databases.sh
 
-#Install pgadmin
-pg_admin_hostname="pgadmin.$DOMAIN" yq -i '.hostname=env(pg_admin_hostname)' ./postgres/pgadmin/values.yaml
-helm upgrade --install pgadmin ./postgres/pgadmin \
---create-namespace --namespace postgres \
+  echo "[elasticsearch] deploying..."
+  helm upgrade --install elasticsearch bitnami/elasticsearch \
+    --create-namespace --namespace elasticsearch \
+    -f ./elasticsearch/values-bitnami.yaml
 
-#Install strimzi-kafka-operator
-helm upgrade --install kafka-operator strimzi/strimzi-kafka-operator \
---create-namespace --namespace kafka
+  echo "[kafka] deploying..."
+  helm upgrade --install kafka bitnami/kafka \
+    --create-namespace --namespace kafka \
+    -f ./kafka/values-bitnami.yaml
 
-#Install kafka and postgresql connector
-helm upgrade --install kafka-cluster ./kafka/kafka-cluster \
---create-namespace --namespace kafka \
---set kafka.replicas="$KAFKA_REPLICAS" \
---set zookeeper.replicas="$ZOOKEEPER_REPLICAS" \
---set postgresql.username="$POSTGRESQL_USERNAME" \
---set postgresql.password="$POSTGRESQL_PASSWORD"
+  echo "[akhq] deploying..."
+  helm upgrade --install akhq akhq/akhq \
+    --create-namespace --namespace kafka \
+    --values ./kafka/akhq.values.yaml
 
-#Install akhq
-akhq_hostname="akhq.$DOMAIN" yq -i '.hostname=env(akhq_hostname)' ./kafka/akhq.values.yaml
-helm upgrade --install akhq akhq/akhq \
---create-namespace --namespace kafka \
---values ./kafka/akhq.values.yaml
+  echo "[datastore] done. Verify: kubectl get pods -n postgres -n kafka -n elasticsearch"
+}
 
-#Install elastic-operator
-helm upgrade --install elastic-operator elastic/eck-operator \
- --create-namespace --namespace elasticsearch
+setup_observability() {
+  helm repo add grafana               https://grafana.github.io/helm-charts                      2>/dev/null || true
+  helm repo add prometheus-community  https://prometheus-community.github.io/helm-charts          2>/dev/null || true
+  helm repo add open-telemetry        https://open-telemetry.github.io/opentelemetry-helm-charts  2>/dev/null || true
+  helm repo add jetstack              https://charts.jetstack.io                                  2>/dev/null || true
+  helm repo update
 
-# Install elasticsearch-cluster
-helm upgrade --install elasticsearch-cluster ./elasticsearch/elasticsearch-cluster \
---create-namespace --namespace elasticsearch \
---set elasticsearch.replicas="$ELASTICSEARCH_REPLICAES" \
---set kibana.ingress.hostname="kibana.$DOMAIN"
+  echo "[loki] deploying..."
+  helm upgrade --install loki grafana/loki \
+    --create-namespace --namespace observability \
+    -f ./observability/loki.values.yaml
 
-#Install loki
-helm upgrade --install loki grafana/loki \
- --create-namespace --namespace observability \
- -f ./observability/loki.values.yaml
+  echo "[tempo] deploying..."
+  helm upgrade --install tempo grafana/tempo \
+    --create-namespace --namespace observability \
+    -f ./observability/tempo.values.yaml
 
-#Install tempo
-helm upgrade --install tempo grafana/tempo \
---create-namespace --namespace observability \
--f ./observability/tempo.values.yaml
+  echo "[cert-manager] deploying..."
+  helm upgrade --install cert-manager jetstack/cert-manager \
+    --namespace cert-manager --create-namespace \
+    --version v1.12.0 \
+    --set installCRDs=true \
+    --set prometheus.enabled=false \
+    --set webhook.timeoutSeconds=4 \
+    --set admissionWebhooks.certManager.create=true
 
-#Install cert manager
-helm upgrade --install cert-manager jetstack/cert-manager \
-  --namespace cert-manager \
-  --create-namespace \
-  --version v1.12.0 \
-  --set installCRDs=true \
-  --set prometheus.enabled=false \
-  --set webhook.timeoutSeconds=4 \
-  --set admissionWebhooks.certManager.create=true
+  echo "[opentelemetry-operator] deploying..."
+  helm upgrade --install opentelemetry-operator open-telemetry/opentelemetry-operator \
+    --create-namespace --namespace observability
 
-#Install opentelemetry-operator
-helm upgrade --install opentelemetry-operator open-telemetry/opentelemetry-operator \
---create-namespace --namespace observability
+  echo "[opentelemetry-collector] deploying..."
+  helm upgrade --install opentelemetry-collector ./observability/opentelemetry \
+    --create-namespace --namespace observability
 
-#Install opentelemetry-collector
-helm upgrade --install opentelemetry-collector ./observability/opentelemetry \
---create-namespace --namespace observability
+  echo "[promtail] deploying..."
+  helm upgrade --install promtail grafana/promtail \
+    --create-namespace --namespace observability \
+    --values ./observability/promtail.values.yaml
 
-#Install promtail
-helm upgrade --install promtail grafana/promtail \
---create-namespace --namespace observability \
---values ./observability/promtail.values.yaml
+  echo "[prometheus/grafana] deploying..."
+  grafana_hostname="grafana.${DOMAIN}" yq -i '.hostname=env(grafana_hostname)' \
+    ./observability/prometheus.values.yaml
+  postgresql_username="${POSTGRESQL_USERNAME}" yq -i \
+    '.grafana."grafana.ini".database.user=env(postgresql_username)' \
+    ./observability/prometheus.values.yaml
+  postgresql_password="${POSTGRESQL_PASSWORD}" yq -i \
+    '.grafana."grafana.ini".database.password=env(postgresql_password)' \
+    ./observability/prometheus.values.yaml
+  helm upgrade --install prometheus prometheus-community/kube-prometheus-stack \
+    --create-namespace --namespace observability \
+    -f ./observability/prometheus.values.yaml
 
-#Install prometheus + grafana
-grafana_hostname="grafana.$DOMAIN" yq -i '.hostname=env(grafana_hostname)' ./observability/prometheus.values.yaml
-postgresql_username="$POSTGRESQL_USERNAME" yq -i '.grafana."grafana.ini".database.user=env(postgresql_username)' ./observability/prometheus.values.yaml
-postgresql_password="$POSTGRESQL_PASSWORD" yq -i '.grafana."grafana.ini".database.password=env(postgresql_password)' ./observability/prometheus.values.yaml
-helm upgrade --install prometheus prometheus-community/kube-prometheus-stack \
- --create-namespace --namespace observability \
--f ./observability/prometheus.values.yaml \
+  echo "[grafana-operator] deploying..."
+  helm upgrade --install grafana-operator \
+    oci://ghcr.io/grafana-operator/helm-charts/grafana-operator \
+    --version v5.0.2 \
+    --create-namespace --namespace observability
 
-#Install grafana operator
-helm upgrade --install grafana-operator oci://ghcr.io/grafana-operator/helm-charts/grafana-operator \
---version v5.0.2 \
---create-namespace --namespace observability
+  echo "[grafana-config] deploying..."
+  helm upgrade --install grafana ./observability/grafana \
+    --create-namespace --namespace observability \
+    --set hostname="grafana.${DOMAIN}" \
+    --set grafana.username="${GRAFANA_USERNAME}" \
+    --set grafana.password="${GRAFANA_PASSWORD}" \
+    --set postgresql.username="${POSTGRESQL_USERNAME}" \
+    --set postgresql.password="${POSTGRESQL_PASSWORD}"
 
-#Add datasource and dashboard to grafana
-helm upgrade --install grafana ./observability/grafana \
---create-namespace --namespace observability \
---set hotname="grafana.$DOMAIN" \
---set grafana.username="$GRAFANA_USERNAME" \
---set grafana.password="$GRAFANA_PASSWORD" \
---set postgresql.username="$POSTGRESQL_USERNAME" \
---set postgresql.password="$POSTGRESQL_PASSWORD"
+  echo "[observability] done. Verify: kubectl get pods -n observability"
+}
 
-helm upgrade --install zookeeper ./zookeeper \
- --namespace zookeeper --create-namespace
+case "$MODE" in
+  datastore)     setup_datastore ;;
+  observability) setup_observability ;;
+  all)           setup_datastore; setup_observability ;;
+  *)             echo "Usage: $0 [all|datastore|observability]"; exit 1 ;;
+esac
+
+echo "setup-cluster.sh complete (mode=$MODE)."

@@ -1,0 +1,113 @@
+#!/usr/bin/env bash
+# rebuild-droplets.sh
+# Dựng lại CỤM LÕI (3 droplet cloud) tự động sau sự cố. KHÔNG bao gồm worker on-prem.
+# - master: kubeadm init + flannel + untaint
+# - worker-1, worker-2: kubeadm join
+# - label node-type=cloud
+# worker-hoa / worker-hiep (on-prem WSL2): JOIN TAY sau (lệnh in ở cuối).
+#
+# CHẠY TỪ: máy có ssh + key id_auto (Windows Git Bash / WSL / Linux).
+# YÊU CẦU: id_auto đã nạp vào authorized_keys của 3 droplet (không passphrase).
+#
+# ⚠️ CẢNH BÁO: script này RESET 3 droplet rồi init lại → XÓA cụm hiện tại trên chúng.
+#    CHỈ chạy khi cụm đã hỏng/cần dựng lại. KHÔNG chạy khi cụm đang chạy tốt.
+
+set -euo pipefail
+
+# ===== 🔒 KHÓA AN TOÀN =====
+# Mặc định KHÓA. Script này RESET 3 droplet → chỉ mở khi THẬT SỰ cần dựng lại.
+# Để dùng: đổi dòng dưới thành ARMED="YES" (chủ đích), chạy xong nên đổi lại "NO".
+ARMED="NO"
+if [ "$ARMED" != "YES" ]; then
+  echo "❌ Script đang KHÓA (ARMED=NO) để chống chạy nhầm."
+  echo "   Script này RESET + dựng lại 3 droplet — sẽ XÓA cụm hiện tại."
+  echo "   Chỉ mở khi cụm đã hỏng/cần rebuild: sửa ARMED=\"YES\" trong file."
+  exit 1
+fi
+
+# ===== CONFIG =====
+KEY="$HOME/.ssh/id_auto"
+MASTER_IP="100.98.171.67"
+W1_IP="100.102.221.122"
+W2_IP="100.73.194.80"
+POD_CIDR="10.244.0.0/16"
+FLANNEL="/root/kube-flannel.yml"   # đã có sẵn --iface=tailscale0 trên master
+SSH="ssh -i $KEY -o StrictHostKeyChecking=accept-new"
+
+# ===== XÁC NHẬN AN TOÀN (chống chạy nhầm) =====
+echo "⚠️  Script sẽ RESET + dựng lại 3 droplet (master + 2 worker)."
+echo "    Cụm hiện tại trên các node này sẽ BỊ XÓA."
+read -r -p "    Gõ 'YES' (in hoa) để tiếp tục: " CONFIRM
+[ "$CONFIRM" = "YES" ] || { echo "Hủy."; exit 1; }
+
+# ===== 1. RESET sạch 3 node =====
+echo "[1/6] Reset 3 droplet..."
+for IP in "$MASTER_IP" "$W1_IP" "$W2_IP"; do
+  $SSH "root@$IP" "kubeadm reset -f >/dev/null 2>&1; rm -rf /etc/cni/net.d ~/.kube/cache; systemctl restart containerd" || true
+done
+
+# ===== 2. INIT MASTER =====
+echo "[2/6] Init master..."
+$SSH "root@$MASTER_IP" "kubeadm init \
+  --apiserver-advertise-address=$MASTER_IP \
+  --pod-network-cidr=$POD_CIDR \
+  --node-name=yas-master"
+
+echo "[2b/6] Setup DNS nhóm (dnsmasq + Tailscale Split DNS)..."
+# dnsmasq trên master resolve *.yas.local.com → master IP cho client nhóm.
+# Cặp với Tailscale admin Split DNS: yas.local.com → $MASTER_IP (config 1 lần, thủ công).
+$SSH "root@$MASTER_IP" 'bash -s' < k8s/deploy/dns/setup-dnsmasq-master.sh || \
+  echo "  ⚠️  dnsmasq setup lỗi — kiểm tailscale0 up trên master chưa. Cụm vẫn chạy, chỉ DNS nhóm cần setup tay."
+echo "    → Nhớ: Tailscale admin Split DNS (yas.local.com → $MASTER_IP) giữ nguyên, KHÔNG mất khi rebuild."
+
+# kubeconfig trên master + node-ip
+$SSH "root@$MASTER_IP" "mkdir -p \$HOME/.kube && \
+  cp -f /etc/kubernetes/admin.conf \$HOME/.kube/config && \
+  echo 'KUBELET_EXTRA_ARGS=--node-ip=$MASTER_IP' > /etc/default/kubelet && \
+  systemctl restart kubelet"
+
+# ===== 3. JOIN COMMAND =====
+echo "[3/6] Tạo join command..."
+JOIN=$($SSH "root@$MASTER_IP" "kubeadm token create --print-join-command")
+echo "    JOIN = $JOIN"
+
+# ===== 4. FLANNEL + UNTAINT =====
+echo "[4/6] Flannel + untaint master..."
+$SSH "root@$MASTER_IP" "export KUBECONFIG=/etc/kubernetes/admin.conf && \
+  kubectl apply -f $FLANNEL && \
+  sleep 5 && \
+  kubectl taint nodes yas-master node-role.kubernetes.io/control-plane:NoSchedule- || true"
+
+# ===== 5. JOIN 2 WORKER DROPLET =====
+echo "[5/6] Join worker droplet..."
+$SSH "root@$W1_IP" "echo 'KUBELET_EXTRA_ARGS=--node-ip=$W1_IP' > /etc/default/kubelet; \
+  $JOIN --node-name=yas-worker-1"
+$SSH "root@$W2_IP" "echo 'KUBELET_EXTRA_ARGS=--node-ip=$W2_IP' > /etc/default/kubelet; \
+  $JOIN --node-name=yas-worker-2"
+
+# ===== 6. LABEL =====
+echo "[6/6] Label node-type=cloud..."
+sleep 20
+$SSH "root@$MASTER_IP" "export KUBECONFIG=/etc/kubernetes/admin.conf && \
+  kubectl label node yas-master yas-worker-1 yas-worker-2 node-type=cloud --overwrite && \
+  kubectl get nodes -o wide"
+
+# ===== XONG =====
+cat <<EOF
+
+✅ CỤM LÕI (3 droplet) DỰNG XONG.
+
+📌 Việc còn lại — LÀM TAY:
+1. Lấy kubeconfig mới về máy client:
+   ssh -i $KEY root@$MASTER_IP "cat /etc/kubernetes/admin.conf" > ~/.kube/config
+   (sửa server thành https://$MASTER_IP:6443 nếu cần)
+
+2. worker-hoa / worker-hiep (on-prem WSL2) — join TAY trên từng máy:
+   sudo kubeadm reset -f && sudo rm -rf /etc/cni/net.d
+   echo "KUBELET_EXTRA_ARGS=--node-ip=<tailscale-ip-máy-đó>" | sudo tee /etc/default/kubelet
+   sudo $JOIN --node-name=<worker-hiep|worker-hoa>
+   # rồi label: kubectl label node <tên> node-type=onprem --overwrite
+
+3. Hạ tầng + app: chạy tutorial Hòa (C11) + ./deploy-yas-applications.sh dev (C18).
+   (Hoặc nối thêm vào script này nếu muốn full auto.)
+EOF

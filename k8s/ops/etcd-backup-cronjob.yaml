@@ -1,0 +1,56 @@
+# CronJob tự động snapshot etcd — chạy trên master mỗi 6 giờ
+# Lưu ý: image etcd tối giản (không có sh/tar) → gọi etcdctl TRỰC TIẾP, không qua shell.
+# → Master giữ 1 bản "latest" (ghi đè mỗi lần). History giữ ở client (PowerShell pull theo ngày).
+apiVersion: batch/v1
+kind: CronJob
+metadata:
+  name: etcd-backup
+  namespace: kube-system
+spec:
+  schedule: "0 */6 * * *"          # mỗi 6 giờ (00:00, 06:00, 12:00, 18:00)
+  concurrencyPolicy: Forbid         # không chạy chồng nếu lần trước chưa xong
+  successfulJobsHistoryLimit: 3     # giữ log 3 job gần nhất
+  failedJobsHistoryLimit: 3
+  jobTemplate:
+    spec:
+      backoffLimit: 2
+      template:
+        spec:
+          # Chạy ĐÚNG trên master (nơi có etcd + cert)
+          nodeName: yas-master
+          # Dùng network của host để reach etcd qua 127.0.0.1:2379
+          hostNetwork: true
+          # Cho phép schedule lên node control-plane (vượt taint)
+          tolerations:
+            - operator: Exists
+          restartPolicy: OnFailure
+          containers:
+            - name: etcd-backup
+              image: registry.k8s.io/etcd:3.5.24-0
+              # Gọi etcdctl TRỰC TIẾP (image không có sh) — ghi đè file latest
+              command:
+                - etcdctl
+                - snapshot
+                - save
+                - /backup/etcd-snapshot.db
+                - --endpoints=https://127.0.0.1:2379
+                - --cacert=/etc/kubernetes/pki/etcd/ca.crt
+                - --cert=/etc/kubernetes/pki/etcd/server.crt
+                - --key=/etc/kubernetes/pki/etcd/server.key
+              volumeMounts:
+                - name: etcd-certs
+                  mountPath: /etc/kubernetes/pki/etcd
+                  readOnly: true
+                - name: backup-dir
+                  mountPath: /backup
+          volumes:
+            # Cert etcd (mount từ host master)
+            - name: etcd-certs
+              hostPath:
+                path: /etc/kubernetes/pki/etcd
+                type: Directory
+            # Thư mục lưu snapshot trên host master (tự tạo nếu chưa có)
+            - name: backup-dir
+              hostPath:
+                path: /var/backups/etcd
+                type: DirectoryOrCreate

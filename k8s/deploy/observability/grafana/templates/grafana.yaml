@@ -1,3 +1,7 @@
+# Grafana MANAGED instance (grafana-operator v5.0.2 tự tạo Deployment+Service, image
+# grafana ~9.x tương thích operator -> hết 404 khi provision datasource/dashboard).
+# BỎ chế độ `external` (operator v5.0.2 KHÔNG tương thích API Grafana 13.1.0 của
+# prometheus-grafana -> 404). KHÔNG đụng prometheus-grafana.
 apiVersion: grafana.integreatly.org/v1beta1
 kind: Grafana
 metadata:
@@ -5,11 +9,26 @@ metadata:
   labels:
     dashboards: "grafana"
 spec:
-  external:
-    url: http://prometheus-grafana
-    adminPassword:
-      name: grafana-admin-credentials
-      key: username
-    adminUser:
-      name: grafana-admin-credentials
-      key: password
+  # grafana.ini. Admin creds = values (admin/admin).
+  # ⚠️ FLAG verify: operator v5.0.2 CÓ THỂ tự sinh secret `grafana-admin-credentials`
+  #    + inject env GF_SECURITY_ADMIN_* (env override grafana.ini). Nếu login admin/admin
+  #    FAIL sau apply -> tạo secret grafana-admin-credentials với keys
+  #    GF_SECURITY_ADMIN_USER/GF_SECURITY_ADMIN_PASSWORD = admin/admin (xem report).
+  config:
+    security:
+      admin_user: "{{ .Values.grafana.username }}"
+      admin_password: "{{ .Values.grafana.password }}"
+    log:
+      mode: "console"
+  # Expose qua NodePort (không phụ thuộc DNS/ingress; truy cập Tailscale IP node:nodePort).
+  service:
+    spec:
+      type: NodePort
+  # Schedule lên CLOUD node (có internet) để tải dashboard 4701/6083 từ grafana.com.
+  # onprem (worker-hiep) DNS lỗi -> không tải được. node-type=cloud = yas-worker-1/2/master.
+  deployment:
+    spec:
+      template:
+        spec:
+          nodeSelector:
+            node-type: cloud

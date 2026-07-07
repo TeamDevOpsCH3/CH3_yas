@@ -1,0 +1,45 @@
+# C12 — Override env-common cho BASELINE (namespace: yas)
+# Dùng chung cho MỌI service khi deploy vào ns yas (-f values-baseline.yaml).
+# image.repository đặt PER-SERVICE lúc deploy (cd-deploy.sh / ArgoCD helm.parameters).
+# 2 họ chart: Java/BFF/sampledata dùng key `backend.*`, 2 UI dùng key `ui.*`.
+
+backend:
+  image:
+    tag: 7899c97c9956      # SHA baseline C09 (build đủ 13 service). Xem ghi chú cuối file.
+    pullPolicy: IfNotPresent
+  serviceMonitor:
+    enabled: false             # cụm KHÔNG cài Prometheus Operator → tắt ServiceMonitor (đồ án bỏ observability)
+  affinity:                    # ƯU TIÊN (mềm) chạy trên droplet cloud; KHÔNG ép cứng theo arch
+    nodeAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 80
+          preference:
+            matchExpressions:
+              - key: node-type
+                operator: In
+                values: ["cloud"]
+
+ui:
+  image:
+    tag: 7899c97c9956      # SHA baseline C09 (build đủ 13 service). Xem ghi chú cuối file.
+    pullPolicy: IfNotPresent
+  affinity:
+    nodeAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 80
+          preference:
+            matchExpressions:
+              - key: node-type
+                operator: In
+                values: ["cloud"]
+
+# ─────────────────────────────────────────────────────────────────────────────
+# GHI CHÚ TAG (cách A — tag = commit SHA, theo quy ước C08):
+#   • main CHƯA được build (chưa PR develop→main lần nào) → KHÔNG có image tag main.
+#   • 7899c97c9956 = SHA baseline C09 (lần build cả 13 service từ develop) → đã kiểm
+#     chứng pull được. Pin cố định = bất biến, tái lập (đúng tinh thần GitOps).
+#   • CI chỉ build service THAY ĐỔI → git HEAD develop (vd 11782a57) thường KHÔNG
+#     có image đủ 13 service → đừng dùng HEAD làm tag chung.
+#   • TODO nhóm: (1) pipeline tự ghi SHA mới nhất per-service vào values rồi commit
+#     (phục vụ ArgoCD C22); (2) khi có lần PR develop→main + build main thì
+#     values-staging đổi sang SHA của main.

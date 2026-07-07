@@ -1,0 +1,31 @@
+# PERMISSIVE port app cho 2 bff @ ns staging (ingress-nginx ngoài mesh -> plaintext).
+# Song song k8s/istio/peer-authentication-bff-ingress.yaml (ns dev). Giữ STRICT toàn ns.
+apiVersion: security.istio.io/v1
+kind: PeerAuthentication
+metadata:
+  name: storefront-bff-ingress
+  namespace: staging
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: storefront-bff
+  mtls:
+    mode: STRICT
+  portLevelMtls:
+    "80":
+      mode: PERMISSIVE
+---
+apiVersion: security.istio.io/v1
+kind: PeerAuthentication
+metadata:
+  name: backoffice-bff-ingress
+  namespace: staging
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: backoffice-bff
+  mtls:
+    mode: STRICT
+  portLevelMtls:
+    "80":
+      mode: PERMISSIVE

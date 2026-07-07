@@ -1,0 +1,84 @@
+# Kafka Connect + Debezium (Postgres CDC) — sync product_dev -> ES qua search consumer.
+# KHONG dung operator (Kafka la Bitnami, khong Strimzi) -> Deployment thuan.
+# Image debezium/connect co san plugin Postgres (pgoutput).
+# Kafka PLAINTEXT (no auth) - giong search service config.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: debezium-connect
+  namespace: kafka
+  labels:
+    app: debezium-connect
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: debezium-connect
+  template:
+    metadata:
+      labels:
+        app: debezium-connect
+    spec:
+      # uu tien node thoang (master 49%) - tranh worker-2 (55%)
+      affinity:
+        nodeAffinity:
+          preferredDuringSchedulingIgnoredDuringExecution:
+            - weight: 100
+              preference:
+                matchExpressions:
+                  - key: node-type
+                    operator: In
+                    values: ["cloud"]
+      containers:
+        - name: connect
+          image: quay.io/debezium/connect:2.7.3.Final
+          ports:
+            - containerPort: 8083
+          env:
+            - name: BOOTSTRAP_SERVERS
+              value: "kafka-cluster-kafka-brokers.kafka:9092"
+            - name: GROUP_ID
+              value: "debezium-connect-cluster"
+            - name: CONFIG_STORAGE_TOPIC
+              value: "debezium_connect_configs"
+            - name: OFFSET_STORAGE_TOPIC
+              value: "debezium_connect_offsets"
+            - name: STATUS_STORAGE_TOPIC
+              value: "debezium_connect_statuses"
+            # giam RAM: 1 replica, replication factor 1 (demo, 3 broker nhung khong can HA)
+            - name: CONFIG_STORAGE_REPLICATION_FACTOR
+              value: "1"
+            - name: OFFSET_STORAGE_REPLICATION_FACTOR
+              value: "1"
+            - name: STATUS_STORAGE_REPLICATION_FACTOR
+              value: "1"
+            - name: KEY_CONVERTER
+              value: "org.apache.kafka.connect.json.JsonConverter"
+            - name: VALUE_CONVERTER
+              value: "org.apache.kafka.connect.json.JsonConverter"
+            # gioi han heap cho nhe (default 1G -> 512M)
+            - name: KAFKA_HEAP_OPTS
+              value: "-Xms256M -Xmx512M"
+          resources:
+            requests: { memory: "512Mi", cpu: "100m" }
+            limits:   { memory: "1Gi",   cpu: "500m" }
+          readinessProbe:
+            httpGet: { path: /, port: 8083 }
+            initialDelaySeconds: 30
+            periodSeconds: 10
+            failureThreshold: 12
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: debezium-connect
+  namespace: kafka
+  labels:
+    app: debezium-connect
+spec:
+  selector:
+    app: debezium-connect
+  ports:
+    - name: rest
+      port: 8083
+      targetPort: 8083

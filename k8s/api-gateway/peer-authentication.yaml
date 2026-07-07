@@ -1,0 +1,18 @@
+# ĐIỂM PERMISSIVE DUY NHẤT của giải pháp: ingress-nginx (ngoài mesh) -> api-gateway:8080
+# plaintext. api-gateway rồi ORIGINATE mTLS tới 12 backend (STRICT). => 0 backend PERMISSIVE.
+# Sau cutover (gw ôm /swagger-ui + /media): có thể GỠ media-ingress + swagger-ui-ingress
+# PERMISSIVE (chỉ còn gw:8080 + 2 bff).
+apiVersion: security.istio.io/v1
+kind: PeerAuthentication
+metadata:
+  name: api-gateway-ingress
+  namespace: dev
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: api-gateway
+  mtls:
+    mode: STRICT
+  portLevelMtls:
+    "8080":
+      mode: PERMISSIVE

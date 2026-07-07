@@ -1,0 +1,46 @@
+# Bitnami Elasticsearch — values for YAS cluster (CH3)
+# Replaces: ECK operator (*.operator.bak/)
+# Reason: operator overhead ~600MB RAM
+
+fullnameOverride: elasticsearch-master  # must match DNS used by search service
+
+# Bitnami moved newer chart versions to bitnamilegacy registry.
+# Pin to match actual running image on cluster.
+image:
+  repository: bitnamilegacy/elasticsearch
+
+# os-shell is used by the sysctl init container (sets vm.max_map_count)
+sysctl:
+  image:
+    repository: bitnamilegacy/os-shell
+
+master:
+  replicaCount: 1
+  masterOnly: false  # node acts as master + data + ingest; false prevents 0 data nodes → index RED
+
+  resources:
+    requests:
+      memory: 512Mi
+      cpu: 200m
+    limits:
+      memory: 768Mi
+      cpu: 500m
+
+  heapSize: 512m
+
+  nodeSelector:
+    node-type: cloud
+
+  persistence:
+    enabled: false  # no PVC; saves cloud disk quota
+
+# All additional node types disabled — single combined node
+data:
+  replicaCount: 0
+coordinating:
+  replicaCount: 0
+ingest:
+  replicaCount: 0
+
+security:
+  enabled: false  # internal cluster traffic only

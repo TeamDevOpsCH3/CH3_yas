@@ -1,0 +1,18 @@
+# C18 — Namespace cho 2 môi trường (app tách ns, hạ tầng dùng chung).
+# Hạ tầng (postgres/kafka/keycloak/elasticsearch/redis) nằm ở ns RIÊNG theo component,
+# do Hòa deploy ở C11 — KHÔNG khai báo ở đây.
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: dev
+  labels:
+    yas.env: dev
+    app.kubernetes.io/part-of: yas
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: staging
+  labels:
+    yas.env: staging
+    app.kubernetes.io/part-of: yas

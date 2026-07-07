@@ -19,6 +19,8 @@ def microservices = [
     [id: 'webhook',        display: 'Webhook Service',        enableTest: true,  enableCoverage: true,  enableBuild: true,  commands: []],
     [id: 'sampledata',     display: 'Sampledata Service',     enableTest: false, enableCoverage: false, enableBuild: true,  commands: []],
     [id: 'recommendation', display: 'Recommendation Service', enableTest: false, enableCoverage: false, enableBuild: true,  commands: []], 
+    [id: 'storefront',     display: 'Storefront UI',          enableTest: false, enableCoverage: false, enableBuild: true,  buildTool: 'node', commands: []],
+    [id: 'backoffice',     display: 'Backoffice UI',          enableTest: false, enableCoverage: false, enableBuild: true,  buildTool: 'node', commands: []],
     [id: 'delivery',       display: 'Delivery Service',       enableTest: false, enableCoverage: false, enableBuild: false, commands: []], 
 ]
 
@@ -41,6 +43,7 @@ def runServicePipeline(service) {
     def enableTest     = service.enableTest     ?: false
     def enableCoverage = service.enableCoverage ?: false
     def enableBuild    = service.enableBuild    ?: false
+    def buildTool      = service.buildTool      ?: 'maven'
     def commands       = service.commands       ?: []
 
     // ------------------------------------------------------------------ //
@@ -88,7 +91,7 @@ def runServicePipeline(service) {
         )
     }
 
-    if (enableBuild) {
+    if (enableBuild && buildTool == 'maven') {
         stage("${serviceDisplay}: Build") {
             sh "mvn package -pl ${serviceId} -am -DskipTests -B --no-transfer-progress"
         }
@@ -135,6 +138,31 @@ pipeline {
     }
 
     parameters {
+        string(
+            name        : 'DOCKER_REGISTRY',
+            defaultValue: 'docker.io',
+            description : 'Docker registry used to push service images'
+        )
+        string(
+            name        : 'DOCKER_IMAGE_NAMESPACE',
+            defaultValue: 'methylch3',
+            description : 'Docker image namespace/organization'
+        )
+        string(
+            name        : 'DOCKER_IMAGE_PREFIX',
+            defaultValue: 'yas-',
+            description : 'Prefix for generated image names, e.g. yas-product'
+        )
+        string(
+            name        : 'DOCKER_CREDENTIALS_ID',
+            defaultValue: 'dockerhub-creds',
+            description : 'Jenkins username/password credentials ID for Docker registry login'
+        )
+        string(
+            name        : 'DOCKER_BUILDX_BUILDER',
+            defaultValue: 'yas-builder',
+            description : 'Docker Buildx builder name used on Jenkins build agents'
+        )
         booleanParam(
             name        : 'FORCE_RUN_ALL',
             defaultValue: false,
@@ -160,6 +188,7 @@ pipeline {
     stages {
         stage('Gitleaks Security Scan') {
             agent { label 'built-in' }
+            when { expression { !(env.BRANCH_NAME ?: '').startsWith('fastImage/') } }
             steps {
                 script {
                     catchError(buildResult: 'SUCCESS', stageResult: 'UNSTABLE', message: 'Gitleaks scan failed: potential secrets detected. Check the logs for details.') {
@@ -197,7 +226,7 @@ pipeline {
                     env.SERVICES_TO_RUN = microservices
                         .findAll { service ->
                             def serviceChanged = changedPaths.any { it.startsWith(service.id + '/') }
-                            params.FORCE_RUN_ALL || noScmContext || pomChanged || pipelineChanged || globalConfigChanged || serviceChanged
+                            params.FORCE_RUN_ALL || (env.BRANCH_NAME ?: '').startsWith('fastImage/') || noScmContext || pomChanged || pipelineChanged || globalConfigChanged || serviceChanged
                         }
                         .collect { it.display }
                         .join(',')
@@ -205,6 +234,11 @@ pipeline {
                     echo "Force run all: ${params.FORCE_RUN_ALL}"
                     echo "Services to run: ${env.SERVICES_TO_RUN ?: '(none)'}"
                 }
+                // built-in da co implicit checkout (khong skipDefaultCheckout) -> stash source
+                // 1 lan. Parallel unstash thay vi ~14 `checkout scm` dong thoi -> tranh saturate
+                // network burst cua EC2 build-agent (root cause checkout timeout). Loai .git (default
+                // excludes) vi mvn test/package khong can git; Build&Push prep giu checkout rieng.
+                stash name: 'source'
             }
         }
 
@@ -213,6 +247,7 @@ pipeline {
         // Running all in parallel saturates RAM → OOM → Jenkins restart   //
         // ---------------------------------------------------------------- //
         stage('Test & Coverage') {
+            when { expression { !(env.BRANCH_NAME ?: '').startsWith('fastImage/') } }
             steps {
                 script {
                     def servicesToRun = env.SERVICES_TO_RUN
@@ -241,7 +276,7 @@ pipeline {
                                             "PATH+JDK=${jdkHome}/bin"
                                         ]) {
                                             try {
-                                                checkout scm
+                                                retry(3) { unstash 'source' }
                                                 echo ">>> Parallel Task: ${s.display}"
                                                 timeout(time: 45, unit: 'MINUTES') {
                                                     runServicePipeline(s)
@@ -262,7 +297,136 @@ pipeline {
         }
 
         // ---------------------------------------------------------------- //
-        // Stage 3: Snyk scan ONCE for entire project (not per service)     //
+        // Stage 3: Build + Push Docker images for changed services only    //
+        // Image tag is the current commit id for traceable deployments     //
+        // ---------------------------------------------------------------- //
+        stage('Build & Push Images') {
+            steps {
+                script {
+                    // ====== Build SONG SONG tối đa 2 (chunk 2). Revert TUẦN TỰ: đổi collate(2) -> collate(1). ======
+                    def registry      = params.DOCKER_REGISTRY.trim()
+                    def namespace     = params.DOCKER_IMAGE_NAMESPACE.trim()
+                    def imagePrefix   = params.DOCKER_IMAGE_PREFIX.trim()
+                    def buildxBuilder = params.DOCKER_BUILDX_BUILDER.trim()
+
+                    def servicesToBuild = []
+                    def commitTag = ''
+
+                    // B1. Chuẩn bị 1 lần: danh sách build + tag + docker login + builder (host dùng chung)
+                    node('build-agent') {
+                        // Prep can .git (git rev-parse HEAD -> commit tag) -> giu checkout nhung
+                        // SHALLOW depth=1 + noTags (nhe network) + retry cho network chap chon.
+                        retry(3) {
+                            checkout([
+                                $class: 'GitSCM',
+                                branches: scm.branches,
+                                userRemoteConfigs: scm.userRemoteConfigs,
+                                extensions: scm.extensions + [
+                                    [$class: 'CloneOption', shallow: true, depth: 1, noTags: true, timeout: 30],
+                                    [$class: 'CheckoutOption', timeout: 30]
+                                ]
+                            ])
+                        }
+                        def servicesToRun = env.SERVICES_TO_RUN
+                            ? env.SERVICES_TO_RUN.split(',').toList()
+                            : []
+                        servicesToBuild = microservices.findAll { service ->
+                            servicesToRun.contains(service.display) &&
+                            (service.enableBuild ?: false) &&
+                            fileExists("${service.id}/Dockerfile")
+                        }
+                        if (!servicesToBuild.isEmpty()) {
+                            commitTag = sh(script: 'git rev-parse --short=12 HEAD', returnStdout: true).trim()
+                            withEnv([
+                                "DOCKER_REGISTRY_VALUE=${registry}",
+                                "DOCKER_BUILDX_BUILDER_VALUE=${buildxBuilder}"
+                            ]) {
+                                withCredentials([usernamePassword(
+                                    credentialsId: params.DOCKER_CREDENTIALS_ID,
+                                    usernameVariable: 'DOCKER_USERNAME',
+                                    passwordVariable: 'DOCKER_PASSWORD'
+                                )]) {
+                                    sh '''
+                                        set +x
+                                        printf '%s' "${DOCKER_PASSWORD}" | docker login "${DOCKER_REGISTRY_VALUE}" -u "${DOCKER_USERNAME}" --password-stdin
+                                        set -x
+                                    '''
+                                    sh '''
+                                        if ! docker buildx version >/dev/null 2>&1; then
+                                            echo 'Docker Buildx is not available on this Jenkins agent.'
+                                            exit 1
+                                        fi
+                                        if ! docker buildx inspect "${DOCKER_BUILDX_BUILDER_VALUE}" >/dev/null 2>&1; then
+                                            docker buildx create --name "${DOCKER_BUILDX_BUILDER_VALUE}" --use
+                                        fi
+                                        docker buildx use "${DOCKER_BUILDX_BUILDER_VALUE}"
+                                        docker buildx inspect --bootstrap
+                                    '''
+                                }
+                            }
+                        }
+                    }
+
+                    if (servicesToBuild.isEmpty()) {
+                        echo 'No changed services with Dockerfile found. Skipping image build/push.'
+                        return
+                    }
+
+                    // B2. Build "trống là vào" — giới hạn = số executor agent (đặt = 2 trong Nodes; nâng 3 sau, KHÔNG sửa code)
+                    def branches = [:]
+                    servicesToBuild.each { service ->
+                        def svc = service
+                        def imageRepository = [registry, namespace, "${imagePrefix}${svc.id}"]
+                            .findAll { it }
+                            .join('/')
+                        def imageName = "${imageRepository}:${commitTag}"
+                        branches["${svc.display}"] = {
+                            node('build-agent') {
+                                stage("${svc.display}: Build & Push") {
+                                    def mvnHome = tool 'maven-3.9'
+                                    def jdkHome = tool 'jdk-25'
+                                    withEnv([
+                                        "PATH+MAVEN=${mvnHome}/bin",
+                                        "JAVA_HOME=${jdkHome}",
+                                        "PATH+JDK=${jdkHome}/bin",
+                                        "DOCKER_BUILDX_BUILDER_VALUE=${buildxBuilder}",
+                                        "SERVICE_ID=${svc.id}",
+                                        "IMAGE_NAME=${imageName}"
+                                    ]) {
+                                        try {
+                                            // Build (mvn package + docker build) khong can .git -> unstash
+                                            // source (0 network) thay checkout scm (chunk 2 -> nhe hon Test).
+                                            retry(3) { unstash 'source' }
+                                            echo "Building and pushing image for ${svc.display} with tag ${commitTag}"
+                                            if ((svc.buildTool ?: 'maven') == 'maven') {
+                                                sh 'mvn package -pl "${SERVICE_ID}" -am -DskipTests -B --no-transfer-progress'
+                                                sh 'docker buildx build --builder "${DOCKER_BUILDX_BUILDER_VALUE}" -t "${IMAGE_NAME}" --push "${SERVICE_ID}"'
+                                            } else {
+                                                // UI Next.js: cap heap Node de khong OOM agent 2GB
+                                                sh 'docker buildx build --builder "${DOCKER_BUILDX_BUILDER_VALUE}" --build-arg NODE_OPTIONS=--max-old-space-size=1536 -t "${IMAGE_NAME}" --push "${SERVICE_ID}"'
+                                            }
+                                        } finally {
+                                            cleanWs()
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    parallel branches
+
+                    // B3. Logout 1 lan
+                    node('build-agent') {
+                        withEnv(["DOCKER_REGISTRY_VALUE=${registry}"]) {
+                            sh 'docker logout "${DOCKER_REGISTRY_VALUE}" || true'
+                        }
+                    }
+                }
+            }
+        }
+
+        // ---------------------------------------------------------------- //
+        // Stage 4: Snyk scan ONCE for entire project (not per service)     //
         // Only runs when ENABLE_SNYK_SCAN = true (manual trigger)          //
         // ---------------------------------------------------------------- //
         stage('Snyk Security Scan') {
@@ -294,6 +458,7 @@ pipeline {
 
         stage('SonarCloud Scan') {
             agent { label 'build-agent' }
+            when { expression { !(env.BRANCH_NAME ?: '').startsWith('fastImage/') } }
             steps {
                 script {
                     def servicesToRun = env.SERVICES_TO_RUN

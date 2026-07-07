@@ -1,0 +1,40 @@
+# =============================================================================
+# peer-authentication-bff-ingress.yaml
+# Cho phép ingress-nginx (NGOÀI mesh, không mTLS) gọi vào 2 BFF qua port app.
+# Giữ NGUYÊN STRICT toàn ns (peer-authentication-dev-strict.yaml của Hoàng) —
+# chỉ nới PERMISSIVE ở PORT app của riêng storefront-bff + backoffice-bff.
+# Traffic nội mesh (service↔service) vẫn mTLS STRICT; chỉ cổng bff mở cho ingress.
+# -----------------------------------------------------------------------------
+# Vì sao cần: PeerAuthentication default STRICT áp mọi workload ns dev → bff
+# (có sidecar) từ chối kết nối plaintext từ ingress-nginx (không sidecar) → 502.
+# portLevelMtls PERMISSIVE cho port app của bff → nhận cả mTLS lẫn plaintext.
+# =============================================================================
+apiVersion: security.istio.io/v1
+kind: PeerAuthentication
+metadata:
+  name: storefront-bff-ingress
+  namespace: dev
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: storefront-bff
+  mtls:
+    mode: STRICT          # mặc định workload vẫn STRICT
+  portLevelMtls:
+    "80":
+      mode: PERMISSIVE    # riêng port app 80: nhận cả plaintext (ingress)
+---
+apiVersion: security.istio.io/v1
+kind: PeerAuthentication
+metadata:
+  name: backoffice-bff-ingress
+  namespace: dev
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: backoffice-bff
+  mtls:
+    mode: STRICT
+  portLevelMtls:
+    "80":
+      mode: PERMISSIVE

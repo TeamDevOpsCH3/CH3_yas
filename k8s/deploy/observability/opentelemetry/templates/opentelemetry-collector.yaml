@@ -4,6 +4,9 @@ metadata:
   name: opentelemetry
 spec:
   mode: deployment
+  # contrib distro: có prometheusremotewrite exporter (bản -k8s minimal thiếu).
+  # Cần để push JVM/HikariCP metrics vào Prometheus (remote-write receiver đã bật).
+  image: ghcr.io/open-telemetry/opentelemetry-collector-releases/opentelemetry-collector-contrib:0.153.0
   ports:
     - name: loki
       port: 3500

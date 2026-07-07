@@ -1,0 +1,43 @@
+# C18 — Override env-common cho DEV (namespace: dev, nhánh: develop)
+# develop → ns dev: môi trường tích hợp, hứng thay đổi sớm.
+
+backend:
+  image:
+    tag: 7899c97c9956 # SHA baseline C09 (build đủ 13 service). Xem ghi chú cuối file.
+    pullPolicy: Always # tag mutable → luôn kéo bản mới nhất khi pod tạo lại
+  serviceMonitor:
+    enabled: false
+  affinity:
+    nodeAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 80
+          preference:
+            matchExpressions:
+              - key: node-type
+                operator: In
+                values: ["cloud"]
+  podAnnotations:
+    instrumentation.opentelemetry.io/inject-java: "true"
+ui:
+  image:
+    tag: 7899c97c9956 # SHA baseline C09 (build đủ 13 service). Xem ghi chú cuối file.
+    pullPolicy: Always
+  affinity:
+    nodeAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 80
+          preference:
+            matchExpressions:
+              - key: node-type
+                operator: In
+                values: ["cloud"]
+# ─────────────────────────────────────────────────────────────────────────────
+# GHI CHÚ TAG (cách A — tag = commit SHA, theo quy ước C08):
+#   • main CHƯA được build (chưa PR develop→main lần nào) → KHÔNG có image tag main.
+#   • 7899c97c9956 = SHA baseline C09 (lần build cả 13 service từ develop) → đã kiểm
+#     chứng pull được. Pin cố định = bất biến, tái lập (đúng tinh thần GitOps).
+#   • CI chỉ build service THAY ĐỔI → git HEAD develop (vd 11782a57) thường KHÔNG
+#     có image đủ 13 service → đừng dùng HEAD làm tag chung.
+#   • TODO nhóm: (1) pipeline tự ghi SHA mới nhất per-service vào values rồi commit
+#     (phục vụ ArgoCD C22); (2) khi có lần PR develop→main + build main thì
+#     values-staging đổi sang SHA của main.

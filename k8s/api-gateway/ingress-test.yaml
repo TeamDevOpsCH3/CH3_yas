@@ -1,0 +1,21 @@
+# INGRESS TEST — host riêng api-test.dev.yas.local.com để verify E2E qua ingress THẬT
+# (ingress-nginx ngoài mesh -> gw:8080 -> mТLS -> backend) mà KHÔNG đụng api.dev đang chạy.
+# Sau khi verified -> cutover: đổi ingress api.dev -> api-gateway (xoá file này).
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: api-gateway-test
+  namespace: dev
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: api-test.dev.yas.local.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: api-gateway
+                port:
+                  number: 8080

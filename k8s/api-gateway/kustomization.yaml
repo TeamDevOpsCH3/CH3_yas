@@ -1,0 +1,17 @@
+# =============================================================================
+# k8s/api-gateway/ — IN-MESH nginx api-gateway cho api.${DOMAIN}.
+# Giải "fix hẳn" swagger 12-spec: gateway originate mТLS -> backend GIỮ STRICT,
+# 0 backend PERMISSIVE (chỉ 1 PERMISSIVE gw:8080 cho ingress ngoài mesh).
+# Verify trước trên api-test.dev (ingress-test.yaml) -> cutover api.dev sau (báo trước).
+#
+# Áp: kubectl apply -k k8s/api-gateway/
+# =============================================================================
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - configmap.yaml
+  - deployment.yaml
+  - peer-authentication.yaml
+  - ingress.yaml         # api.dev (production cutover)
+  - ingress-test.yaml    # api-test.dev (fallback — xoá sau khi cutover ổn định)

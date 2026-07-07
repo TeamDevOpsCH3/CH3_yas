@@ -1,0 +1,46 @@
+# Bitnami Keycloak — values for YAS cluster (CH3)
+# Replaces: Keycloak Operator CRD (*.operator.bak/)
+# Reason: operator CRDs incompatible with cluster K8s version
+
+fullnameOverride: identity  # DNS: identity.keycloak.svc.cluster.local (referenced by all YAS apps)
+
+auth:
+  adminUser: admin
+  adminPassword: admin
+
+postgresql:
+  enabled: false  # use shared PostgreSQL in namespace postgres
+
+externalDatabase:
+  host: postgresql.postgres.svc.cluster.local
+  port: 5432
+  user: yasadminuser
+  password: admin
+  database: keycloak
+
+service:
+  type: NodePort  # no cloud LoadBalancer; access via Tailscale IP + NodePort
+
+resources:
+  requests:
+    memory: 512Mi
+    cpu: 200m
+  limits:
+    memory: 768Mi
+    cpu: 500m
+
+nodeSelector:
+  node-type: cloud
+
+# --- Realm import qua keycloakConfigCli (versioned — kích hoạt khi rebuild) ---
+# Realm Yas từng chỉ sống trong DB (operator realm-import bị bỏ khi migrate Bitnami).
+# Block này để rebuild tự import lại realm (clients + users + redirect_uri .dev/.staging)
+# từ ConfigMap yas-realm-import → vá lỗ hổng DR.
+keycloakConfigCli:
+  enabled: true
+  existingConfigmap: yas-realm-import   # ConfigMap chứa yas-realm.json
+  extraEnvVars:
+    - name: IMPORT_VARSUBSTITUTION_ENABLED
+      value: "true"
+    - name: IMPORT_MANAGED_CLIENT
+      value: "no-delete"    # không xóa client đã có (idempotent, an toàn chạy lại)

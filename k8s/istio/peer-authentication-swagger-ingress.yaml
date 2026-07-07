@@ -1,0 +1,25 @@
+# =============================================================================
+# peer-authentication-swagger-ingress.yaml
+# swagger-ui phục vụ qua ingress: api.${DOMAIN}/swagger-ui.
+# ingress-nginx NẰM NGOÀI mesh (không sidecar) -> gửi plaintext vào swagger-ui
+# (có sidecar, STRICT) -> Envoy reset (NR filter_chain_not_found) -> 502.
+# Nới PERMISSIVE riêng PORT app 8080 của swagger-ui (giống bff/media ingress C24).
+# Traffic nội mesh vẫn mTLS STRICT; chỉ cổng 8080 nhận cả plaintext từ ingress.
+# -----------------------------------------------------------------------------
+# ⚠️ BẢO MẬT: điểm vào plaintext (như bff/media). Chỉ port 8080; còn lại STRICT.
+# Bỏ được nếu đưa ingress-nginx vào mesh (Hướng B — cần chuẩn hoá appProtocol).
+# =============================================================================
+apiVersion: security.istio.io/v1
+kind: PeerAuthentication
+metadata:
+  name: swagger-ui-ingress
+  namespace: dev
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: swagger-ui
+  mtls:
+    mode: STRICT
+  portLevelMtls:
+    "8080":
+      mode: PERMISSIVE

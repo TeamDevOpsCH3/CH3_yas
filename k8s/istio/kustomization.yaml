@@ -1,0 +1,13 @@
+apiVersion: kustomize.config.k8s.io/v1beta1
+kind: Kustomization
+
+resources:
+  - peer-authentication-dev-strict.yaml
+  - peer-authentication-bff-ingress.yaml
+  # Cutover Option 1: media + swagger giờ reach qua api-gateway (mТLS) -> gỡ PERMISSIVE
+  # trực tiếp của chúng. File giữ lại để rollback (thêm lại 2 dòng dưới nếu cần).
+  # - peer-authentication-media-ingress.yaml
+  # - peer-authentication-swagger-ingress.yaml
+  - authorization-policy-product-deny-order.yaml
+  - virtual-service-tax-retry.yaml
+  - virtual-service-product-retry.yaml
