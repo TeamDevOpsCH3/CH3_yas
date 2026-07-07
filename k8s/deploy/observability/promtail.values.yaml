@@ -1,6 +1,7 @@
 config:
   clients:
-    - url: http://opentelemetry-collector:3500/loki/api/v1/push
+    # Push THẲNG vào Loki gateway (collector đã bỏ loki receiver -> port 3500 refused).
+    - url: http://loki-gateway/loki/api/v1/push
   snippets:
     pipelineStages:
       - docker: {}
