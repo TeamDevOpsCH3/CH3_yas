@@ -1,0 +1,23 @@
+# INGRESS STAGING — api.staging.yas.local.com -> api-gateway (in-mesh) -> mTLS -> backend.
+# Cutover Option 1: gw ôm /swagger-ui + /media + /<svc>/v3/api-docs.
+# ⚠️ XUNG ĐỘT HOST: ns staging đã có ingress media + swagger-ui cùng host
+# api.staging.yas.local.com. Khi cutover phải GỠ 2 ingress cũ đó (để gw ôm /media +
+# /swagger-ui). KHÔNG tự xoá — xem report (thứ tự apply).
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: api-gateway
+  namespace: staging
+spec:
+  ingressClassName: nginx
+  rules:
+    - host: api.staging.yas.local.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: api-gateway
+                port:
+                  number: 8080
