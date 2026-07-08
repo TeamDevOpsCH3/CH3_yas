@@ -122,17 +122,15 @@ ingress:
 #    secretName: chart-example-tls
 #    host: chart-example.local
 
-resources: {}
-  # We usually recommend not to specify default resources and to leave this as a conscious
-  # choice for the user. This also increases chances charts run on environments with little
-  # resources, such as Minikube. If you do want to specify resources, uncomment the following
-  # lines, adjust them as necessary, and remove the curly braces after 'resources:'.
-  # limits:
-  #   cpu: 100m
-  #   memory: 128Mi
-  # requests:
-  #   cpu: 100m
-  #   memory: 128Mi
+# Java Spring Boot + Istio sidecar + OTel javaagent. Requests cho scheduler biết tải THẬT
+# -> chia đều pod theo capacity thay vì dồn 1 node (resources:{} => scheduler tưởng pod 0 tài
+# nguyên -> nhồi cục -> OOM). KHÔNG set cpu limit (tránh throttle Java lúc startup).
+resources:
+  requests:
+    cpu: 250m          # Java idle ~200m + buffer
+    memory: 512Mi      # heap + Spring + overhead
+  limits:
+    memory: 1Gi        # chặn 1 pod ăn hết RAM node
 
 autoscaling:
   enabled: false
