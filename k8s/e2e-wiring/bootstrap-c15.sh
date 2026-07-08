@@ -64,14 +64,17 @@ kubectl -n ingress-nginx rollout status deploy/ingress-nginx-controller --timeou
 # --- 3. Apply bộ wiring (gọi lại apply-all.sh đã có) ---
 
 log "[3/7] CoreDNS rewrite cho SSR (*.yas.local.com -> service noi bo)"
-if kubectl -n kube-system get configmap coredns -o jsonpath='{.data.Corefile}' \
-     | grep -q 'rewrite name storefront.dev.yas.local.com'; then
-  warn "CoreDNS rewrite storefront.dev da co - bo qua."
+if kubectl -n kube-system get configmap coredns -o jsonpath='{.data.Corefile}' | grep -q 'rewrite name storefront.staging.yas.local.com'; then
+  warn "CoreDNS rewrite .dev + .staging da co - bo qua."
 else
   log "Them rewrite vao CoreDNS (backup truoc)"
   kubectl -n kube-system get configmap coredns -o yaml > "/tmp/coredns-backup-$(date +%s).yaml"
   kubectl -n kube-system get configmap coredns -o jsonpath='{.data.Corefile}' > /tmp/Corefile.cur
-  if grep -q 'rewrite name identity.yas.local.com' /tmp/Corefile.cur; then
+  if grep -q 'rewrite name storefront.dev.yas.local.com' /tmp/Corefile.cur; then
+    # .dev da co, chi thieu .staging -> chen 3 dong .staging sau .dev cuoi (api.dev),
+    # TRONG block .:53 (truoc 'kubernetes cluster.local') - KHONG lot ngoai dau }.
+    sed -i '/rewrite name api.dev.yas.local.com/a\        rewrite name storefront.staging.yas.local.com storefront-bff.staging.svc.cluster.local\n        rewrite name backoffice.staging.yas.local.com backoffice-bff.staging.svc.cluster.local\n        rewrite name api.staging.yas.local.com swagger-ui.staging.svc.cluster.local' /tmp/Corefile.cur
+  elif grep -q 'rewrite name identity.yas.local.com' /tmp/Corefile.cur; then
     sed -i '/rewrite name identity.yas.local.com/a\        rewrite name storefront.yas.local.com storefront-bff.dev.svc.cluster.local\n        rewrite name backoffice.yas.local.com backoffice-bff.dev.svc.cluster.local\n        rewrite name api.yas.local.com swagger-ui.dev.svc.cluster.local\n        rewrite name storefront.dev.yas.local.com storefront-bff.dev.svc.cluster.local\n        rewrite name backoffice.dev.yas.local.com backoffice-bff.dev.svc.cluster.local\n        rewrite name api.dev.yas.local.com swagger-ui.dev.svc.cluster.local\n        rewrite name storefront.staging.yas.local.com storefront-bff.staging.svc.cluster.local\n        rewrite name backoffice.staging.yas.local.com backoffice-bff.staging.svc.cluster.local\n        rewrite name api.staging.yas.local.com swagger-ui.staging.svc.cluster.local' /tmp/Corefile.cur
   else
     sed -i '/ready/a\        rewrite name identity.yas.local.com identity.keycloak.svc.cluster.local\n        rewrite name storefront.yas.local.com storefront-bff.dev.svc.cluster.local\n        rewrite name backoffice.yas.local.com backoffice-bff.dev.svc.cluster.local\n        rewrite name api.yas.local.com swagger-ui.dev.svc.cluster.local\n        rewrite name storefront.dev.yas.local.com storefront-bff.dev.svc.cluster.local\n        rewrite name backoffice.dev.yas.local.com backoffice-bff.dev.svc.cluster.local\n        rewrite name api.dev.yas.local.com swagger-ui.dev.svc.cluster.local\n        rewrite name storefront.staging.yas.local.com storefront-bff.staging.svc.cluster.local\n        rewrite name backoffice.staging.yas.local.com backoffice-bff.staging.svc.cluster.local\n        rewrite name api.staging.yas.local.com swagger-ui.staging.svc.cluster.local' /tmp/Corefile.cur
