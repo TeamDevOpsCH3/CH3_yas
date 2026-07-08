@@ -8,6 +8,7 @@ metadata:
   labels:
     yas.env: dev
     app.kubernetes.io/part-of: yas
+    istio-injection: enabled
 ---
 apiVersion: v1
 kind: Namespace
@@ -16,3 +17,4 @@ metadata:
   labels:
     yas.env: staging
     app.kubernetes.io/part-of: yas
+    istio-injection: enabled
