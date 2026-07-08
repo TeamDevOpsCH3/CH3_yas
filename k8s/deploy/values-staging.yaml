@@ -16,6 +16,8 @@ backend:
               - key: node-type
                 operator: In
                 values: ["cloud"]
+  podAnnotations:
+    instrumentation.opentelemetry.io/inject-java: "true"
 
 ui:
   image:
