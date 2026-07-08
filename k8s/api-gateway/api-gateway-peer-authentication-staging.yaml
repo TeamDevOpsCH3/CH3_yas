@@ -1,0 +1,18 @@
+# ĐIỂM PERMISSIVE DUY NHẤT (ns staging): ingress-nginx (ngoài mesh) -> api-gateway:8080
+# plaintext. api-gateway rồi ORIGINATE mTLS tới backend (STRICT). => 0 backend PERMISSIVE.
+# Song song peer-authentication.yaml (ns dev). Sau cutover (gw ôm /swagger-ui + /media)
+# có thể GỠ media/swagger-ui PERMISSIVE của staging (nếu có) — chỉ còn gw:8080 + 2 bff.
+apiVersion: security.istio.io/v1
+kind: PeerAuthentication
+metadata:
+  name: api-gateway-ingress
+  namespace: staging
+spec:
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: api-gateway
+  mtls:
+    mode: STRICT
+  portLevelMtls:
+    "8080":
+      mode: PERMISSIVE
