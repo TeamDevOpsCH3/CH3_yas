@@ -210,10 +210,12 @@ pipeline {
                         script: '''
                             set -e
 
+                            git fetch origin "${BRANCH_NAME}" --no-tags --depth=50 || true
+
                             if git rev-parse HEAD~1 >/dev/null 2>&1; then
                                 git diff --name-only HEAD~1 HEAD
                             else
-                                git diff-tree --no-commit-id --name-only -r HEAD
+                                git diff-tree --no-commit-id --name-only --root -r HEAD
                             fi
                         ''',
                         returnStdout: true
