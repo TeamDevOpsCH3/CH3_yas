@@ -206,7 +206,24 @@ pipeline {
             agent { label 'built-in' }
             steps {
                 script {
-                    def changedPaths = collectChangedPaths()
+                    def changedPaths = sh(
+                        script: '''
+                            set -e
+
+                            git fetch origin "${BRANCH_NAME}" --no-tags --depth=50 || true
+
+                            if git rev-parse HEAD~1 >/dev/null 2>&1; then
+                                git diff --name-only HEAD~1 HEAD
+                            else
+                                git diff-tree --no-commit-id --name-only --root -r HEAD
+                            fi
+                        ''',
+                        returnStdout: true
+                    ).trim()
+                    .split('\\n')
+                    .collect { it.trim() }
+                    .findAll { it }
+
                     def pomChanged   = changedPaths.contains('pom.xml')
                     def pipelineChanged = changedPaths.contains('Jenkinsfile')
                     def noScmContext = changedPaths.isEmpty()
@@ -226,7 +243,7 @@ pipeline {
                     env.SERVICES_TO_RUN = microservices
                         .findAll { service ->
                             def serviceChanged = changedPaths.any { it.startsWith(service.id + '/') }
-                            params.FORCE_RUN_ALL || (env.BRANCH_NAME ?: '').startsWith('fastImage/') || noScmContext || pomChanged || pipelineChanged || globalConfigChanged || serviceChanged
+                            params.FORCE_RUN_ALL || (env.BRANCH_NAME ?: '').startsWith('fastImage/') || serviceChanged
                         }
                         .collect { it.display }
                         .join(',')
