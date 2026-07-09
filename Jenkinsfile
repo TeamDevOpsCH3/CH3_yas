@@ -243,7 +243,8 @@ pipeline {
                     env.SERVICES_TO_RUN = microservices
                         .findAll { service ->
                             def serviceChanged = changedPaths.any { it.startsWith(service.id + '/') }
-                            params.FORCE_RUN_ALL || (env.BRANCH_NAME ?: '').startsWith('fastImage/') || serviceChanged
+                            params.FORCE_RUN_ALL || (env.BRANCH_NAME ?: '').startsWith('fastImage/') ||
+                            pomChanged || globalConfigChanged || serviceChanged
                         }
                         .collect { it.display }
                         .join(',')
