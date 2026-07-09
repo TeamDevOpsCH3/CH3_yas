@@ -3,7 +3,7 @@ backend:
     repository: ghcr.io/nashtech-garage/yas-cart
     tag: latest
   podAnnotations:
-    demo-sync: "cuong-1"
+    demo-sync: "cuong-11"
 
   nameOverride: cart
   fullnameOverride: cart
