@@ -162,7 +162,7 @@ pipeline {
             *)
               FAMILY="backend"
               SERVICE_PORT="80"
-              TARGET_PORT="8090"
+              TARGET_PORT="80"
               ;;
           esac
 
@@ -393,7 +393,7 @@ EOF
             NODE_PORT=$(kubectl -n "$NS" get svc "${SERVICE}-np" -o jsonpath='{.spec.ports[0].nodePort}')
 
             if [ "$FAMILY" = "backend" ]; then
-              curl -i --max-time 10 "http://$NODE_IP:$NODE_PORT/actuator/health" || true
+              curl -i --max-time 10 "http://$SERVICE.$NS.svc.cluster.local:8090/actuator/health" || true
             else
               curl -i --max-time 10 "http://$NODE_IP:$NODE_PORT" || true
             fi
