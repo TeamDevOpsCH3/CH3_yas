@@ -22,4 +22,11 @@ public class MessagesUtils {
         FormattingTuple formattingTuple = MessageFormatter.arrayFormat(message, var2);
         return formattingTuple.getMessage();
     }
+
+    public static String normalizeMessageCode(String errorCode) {
+        if (errorCode == null) {
+            return errorCode.trim();
+        }
+        return errorCode.trim().toUpperCase(Locale.ROOT);
+    }
 }
