@@ -315,7 +315,66 @@ pipeline {
         }
 
         // ---------------------------------------------------------------- //
-        // Stage 3: Build + Push Docker images for changed services only    //
+        // Stage 3: Snyk scan ONCE for entire project (not per service)     //
+        // Only runs when ENABLE_SNYK_SCAN = true (manual trigger)          //
+        // ---------------------------------------------------------------- //
+        stage('Snyk Security Scan') {
+            when {
+                allOf {
+                    expression { params.ENABLE_SNYK_SCAN == true }
+                    anyOf {
+                        expression { params.FORCE_RUN_ALL == true }
+                        expression {
+                            def changedPaths = collectChangedPaths()
+                            changedPaths.isEmpty() ||   // no SCM context = first run
+                            changedPaths.any { it == 'pom.xml' || it.endsWith('/pom.xml') }
+                        }
+                    }
+                }
+            }
+            agent { label 'build-agent' }
+            steps {
+                snykSecurity(
+                    snykInstallation: 'snyk-cli',
+                    snykTokenId     : 'snyk-token',
+                    targetFile      : 'pom.xml',
+                    projectName     : 'yas-monorepo',
+                    severity        : params.SNYK_SEVERITY,
+                    failOnIssues    : params.SNYK_FAIL_ON_ISSUES
+                )
+            }
+        }
+
+        stage('SonarCloud Scan') {
+            agent { label 'build-agent' }
+            when { expression { !(env.BRANCH_NAME ?: '').startsWith('fastImage/') } }
+            steps {
+                script {
+                    def servicesToRun = env.SERVICES_TO_RUN
+                        ? env.SERVICES_TO_RUN.split(',').toList()
+                        : []
+
+                    if (servicesToRun.isEmpty()) {
+                        echo 'No services to scan. Skipping.'
+                        return
+                    }
+
+                    sh """
+                        mvn verify sonar:sonar \
+                        -DskipTests \
+                        -DskipITs \
+                        -Dsonar.projectKey=teamdevopsch3_CH3_yas4 \
+                        -Dsonar.organization=teamdevopsch3 \
+                        -Dsonar.host.url=https://sonarcloud.io \
+                        -Dsonar.login=\${SONAR_TOKEN} \
+                        -B --no-transfer-progress
+                    """
+                }
+            }
+        }
+
+        // ---------------------------------------------------------------- //
+        // Stage 4: Build + Push Docker images for changed services only    //
         // Image tag is the current commit id for traceable deployments     //
         // ---------------------------------------------------------------- //
         stage('Build & Push Images') {
@@ -439,65 +498,6 @@ pipeline {
                             sh 'docker logout "${DOCKER_REGISTRY_VALUE}" || true'
                         }
                     }
-                }
-            }
-        }
-
-        // ---------------------------------------------------------------- //
-        // Stage 4: Snyk scan ONCE for entire project (not per service)     //
-        // Only runs when ENABLE_SNYK_SCAN = true (manual trigger)          //
-        // ---------------------------------------------------------------- //
-        stage('Snyk Security Scan') {
-            when {
-                allOf {
-                    expression { params.ENABLE_SNYK_SCAN == true }
-                    anyOf {
-                        expression { params.FORCE_RUN_ALL == true }
-                        expression {
-                            def changedPaths = collectChangedPaths()
-                            changedPaths.isEmpty() ||   // no SCM context = first run
-                            changedPaths.any { it == 'pom.xml' || it.endsWith('/pom.xml') }
-                        }
-                    }
-                }
-            }
-            agent { label 'build-agent' }
-            steps {
-                snykSecurity(
-                    snykInstallation: 'snyk-cli',
-                    snykTokenId     : 'snyk-token',
-                    targetFile      : 'pom.xml',
-                    projectName     : 'yas-monorepo',
-                    severity        : params.SNYK_SEVERITY,
-                    failOnIssues    : params.SNYK_FAIL_ON_ISSUES
-                )
-            }
-        }
-
-        stage('SonarCloud Scan') {
-            agent { label 'build-agent' }
-            when { expression { !(env.BRANCH_NAME ?: '').startsWith('fastImage/') } }
-            steps {
-                script {
-                    def servicesToRun = env.SERVICES_TO_RUN
-                        ? env.SERVICES_TO_RUN.split(',').toList()
-                        : []
-
-                    if (servicesToRun.isEmpty()) {
-                        echo 'No services to scan. Skipping.'
-                        return
-                    }
-
-                    sh """
-                        mvn verify sonar:sonar \
-                        -DskipTests \
-                        -DskipITs \
-                        -Dsonar.projectKey=teamdevopsch3_CH3_yas4 \
-                        -Dsonar.organization=teamdevopsch3 \
-                        -Dsonar.host.url=https://sonarcloud.io \
-                        -Dsonar.login=\${SONAR_TOKEN} \
-                        -B --no-transfer-progress
-                    """
                 }
             }
         }
