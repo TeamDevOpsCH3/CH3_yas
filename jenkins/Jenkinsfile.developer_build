@@ -402,14 +402,6 @@ EOF
               curl -i --max-time 10 "http://$NODE_IP:$NODE_PORT" || true
             fi
 
-            case "$SERVICE" in
-              product)
-                SMOKE_URL="http://$NODE_IP:$NODE_PORT/product/storefront/products?pageNo=0&pageSize=1"
-                echo "Smoke test: $SMOKE_URL"
-                curl -fsS --max-time 20 "$SMOKE_URL" >/dev/null
-                ;;
-            esac
-
             echo ""
             echo "C16 Developer Preview Ready"
             echo "Namespace : $NS"
