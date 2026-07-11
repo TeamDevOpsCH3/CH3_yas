@@ -279,17 +279,17 @@ EOF
             CHART_ROOT=$(cat .chart_root)
 
             helm upgrade --install yas-configuration "$CHART_ROOT/yas-configuration" -n "$NS" \
-              --set yas.services.product=http://product.dev/product \
-              --set yas.services.cart=http://cart.dev/cart \
-              --set yas.services.order=http://order.dev/order \
-              --set yas.services.tax=http://tax.dev/tax \
-              --set yas.services.customer=http://customer.dev/customer \
-              --set yas.services.inventory=http://inventory.dev/inventory \
-              --set yas.services.media=http://media.dev/media \
-              --set yas.services.search=http://search.dev/search \
-              --set yas.services.sampledata=http://sampledata.dev/sampledata \
-              --set yas.services.storefrontBff=http://storefront-bff.dev \
-              --set yas.services.backofficeBff=http://backoffice-bff.dev
+              --set applicationConfig.yas.services.product=http://product.dev.svc.cluster.local/product \
+              --set applicationConfig.yas.services.cart=http://cart.dev.svc.cluster.local/cart \
+              --set applicationConfig.yas.services.order=http://order.dev.svc.cluster.local/order \
+              --set applicationConfig.yas.services.tax=http://tax.dev.svc.cluster.local/tax \
+              --set applicationConfig.yas.services.customer=http://customer.dev.svc.cluster.local/customer \
+              --set applicationConfig.yas.services.inventory=http://inventory.dev.svc.cluster.local/inventory \
+              --set applicationConfig.yas.services.media=http://media.dev.svc.cluster.local/media \
+              --set applicationConfig.yas.services.search=http://search.dev.svc.cluster.local/search \
+              --set applicationConfig.yas.services.sampledata=http://sampledata.dev.svc.cluster.local/sampledata \
+              --set applicationConfig.yas.services.storefrontBff=http://storefront-bff.dev.svc.cluster.local \
+              --set applicationConfig.yas.services.backofficeBff=http://backoffice-bff.dev.svc.cluster.local
 
             kubectl -n "$NS" scale deploy/yas-reloader --replicas=0 || true
           '''
@@ -393,10 +393,22 @@ EOF
             NODE_PORT=$(kubectl -n "$NS" get svc "${SERVICE}-np" -o jsonpath='{.spec.ports[0].nodePort}')
 
             if [ "$FAMILY" = "backend" ]; then
-              curl -i --max-time 10 "http://$SERVICE.$NS.svc.cluster.local:8090/actuator/health" || true
+              kubectl -n "$NS" port-forward "svc/$SERVICE" 18090:8090 >/tmp/${SERVICE}-${TASK_ID}-health-port-forward.log 2>&1 &
+              PF_PID=$!
+              sleep 3
+              curl -i --max-time 10 "http://127.0.0.1:18090/actuator/health" || true
+              kill "$PF_PID" >/dev/null 2>&1 || true
             else
               curl -i --max-time 10 "http://$NODE_IP:$NODE_PORT" || true
             fi
+
+            case "$SERVICE" in
+              product)
+                SMOKE_URL="http://$NODE_IP:$NODE_PORT/product/storefront/products?pageNo=0&pageSize=1"
+                echo "Smoke test: $SMOKE_URL"
+                curl -fsS --max-time 20 "$SMOKE_URL" >/dev/null
+                ;;
+            esac
 
             echo ""
             echo "C16 Developer Preview Ready"
